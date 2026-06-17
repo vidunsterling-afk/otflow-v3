@@ -1,0 +1,67 @@
+import "server-only";
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  session: { strategy: "jwt" },
+  pages: { signIn: "/login" },
+  providers: [
+    Credentials({
+      name: "credentials",
+      credentials: {
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.username || !credentials?.password) return null;
+
+        const user = await prisma.user.findUnique({
+          where: { username: credentials.username as string },
+          include: { role: true },
+        });
+
+        if (!user || !user.isActive) return null;
+
+        const valid = await bcrypt.compare(
+          credentials.password as string,
+          user.passwordHash,
+        );
+        if (!valid) return null;
+
+        return {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          roleId: user.roleId,
+          roleName: user.role.name,
+          permissions: user.role.permissions,
+          canApprove: user.canApprove,
+        };
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.username = (user as any).username;
+        token.roleId = (user as any).roleId;
+        token.roleName = (user as any).roleName;
+        token.permissions = (user as any).permissions;
+        token.canApprove = (user as any).canApprove;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      session.user.id = token.id as string;
+      (session.user as any).username = token.username;
+      (session.user as any).roleId = token.roleId;
+      (session.user as any).roleName = token.roleName;
+      (session.user as any).permissions = token.permissions;
+      (session.user as any).canApprove = token.canApprove;
+      return session;
+    },
+  },
+});

@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  canApprove   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  activeStatus String   @default("offline")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  decidedEntries OtEntry[]  @relation("DecidedBy")
+  createdEntries OtEntry[]  @relation("CreatedBy")
+  updatedEntries OtEntry[]  @relation("UpdatedBy")
+  auditLogs      AuditLog[]
+
+  @@index([email])
+  @@index([roleId])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  permissions String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[]
+}
+
+model Employee {
+  id        String    @id @default(cuid())
+  empId     String    @unique
+  name      String
+  addedDate DateTime  @default(now())
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  otEntries OtEntry[]
+
+  @@index([empId])
+  @@index([isDeleted])
+}
+
+model OtEntry {
+  id       String @id @default(cuid())
+  workDate String
+  shift    String
+  inTime   String?
+  outTime  String?
+  reason   String?
+
+  normalMinutes  Int @default(0)
+  doubleMinutes  Int @default(0)
+  tripleMinutes  Int @default(0)
+  isNight        Boolean @default(false)
+
+  approvedNormalMinutes  Int @default(0)
+  approvedDoubleMinutes  Int @default(0)
+  approvedTripleMinutes  Int @default(0)
+  approvedTotalMinutes   Int @default(0)
+  isApprovedOverride     Boolean @default(false)
+
+  status         String   @default("PENDING")
+  decisionReason String?
+  decidedAt      DateTime?
+  manualOverride Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  decidedById String?
+  decidedBy   User?   @relation("DecidedBy", fields: [decidedById], references: [id])
+
+  createdById String?
+  createdBy   User?   @relation("CreatedBy", fields: [createdById], references: [id])
+
+  updatedById String?
+  updatedBy   User?   @relation("UpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([employeeId, workDate])
+  @@index([workDate])
+  @@index([status])
+  @@index([workDate, status])
+}
+
+model TripleOtDay {
+  id        String   @id @default(cuid())
+  date      String   @unique
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
+
+model DecisionReason {
+  id        String   @id @default(cuid())
+  type      String
+  label     String
+  active    Boolean  @default(true)
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  diff       Json?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  actorUserId String
+  actor       User   @relation(fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+}
