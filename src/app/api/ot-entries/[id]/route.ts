@@ -86,10 +86,12 @@ export async function PATCH(
       },
     });
 
+    // Notify creator
     try {
       if (existing.createdById) {
         await notifyEntryDecision({
           createdById: existing.createdById,
+          decidedByUserId: (session.user as any).id,
           employeeName: updated.employee.name,
           workDate: updated.workDate,
           entryId: id,
@@ -130,10 +132,12 @@ export async function PATCH(
       },
     });
 
+    // Notify creator
     try {
       if (existing.createdById) {
         await notifyEntryDecision({
           createdById: existing.createdById,
+          decidedByUserId: (session.user as any).id,
           employeeName: updated.employee.name,
           workDate: updated.workDate,
           entryId: id,

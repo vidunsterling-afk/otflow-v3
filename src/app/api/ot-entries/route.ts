@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { notifyApprovers } from "@/lib/notify";
+import { notifyOtViewers } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 import { calcOtMinutes } from "@/lib/otCalc";
 import { Prisma } from "@prisma/client";
@@ -76,12 +76,14 @@ export async function POST(req: NextRequest) {
   // ── Single: body is an object (existing behaviour) ────────────────
   try {
     const entry = await createSingleEntry(body, session);
+    // Notify all OT viewers about new submission
     try {
       const creator = await prisma.user.findUnique({
         where: { id: (session.user as any).id },
         select: { username: true },
       });
-      await notifyApprovers({
+      await notifyOtViewers({
+        submittedByUserId: (session.user as any).id,
         submittedByName: creator?.username ?? "Someone",
         employeeName: entry.employee.name,
         workDate: entry.workDate,

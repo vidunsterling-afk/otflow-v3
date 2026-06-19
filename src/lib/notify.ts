@@ -24,25 +24,45 @@ export async function createNotification(params: CreateNotificationParams) {
   });
 }
 
-// Notify all users who can approve when a new OT entry is submitted
-export async function notifyApprovers(params: {
+// Notify ALL active users who have ot:view permission
+// (covers all roles that can see OT entries)
+export async function notifyOtViewers(params: {
+  submittedByUserId: string; // exclude the submitter themselves
   submittedByName: string;
   employeeName: string;
   workDate: string;
   entryId: string;
 }) {
-  const approvers = await prisma.user.findMany({
-    where: { canApprove: true, isActive: true },
+  // Get all roles that have ot:view permission
+  const rolesWithView = await prisma.role.findMany({
+    where: {
+      permissions: { has: "ot:view" },
+    },
     select: { id: true },
   });
 
+  const roleIds = rolesWithView.map((r) => r.id);
+  if (roleIds.length === 0) return;
+
+  // Get all active users with those roles, excluding the submitter
+  const users = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      roleId: { in: roleIds },
+      id: { not: params.submittedByUserId },
+    },
+    select: { id: true },
+  });
+
+  if (users.length === 0) return;
+
   await Promise.all(
-    approvers.map((a) =>
+    users.map((u) =>
       createNotification({
-        userId: a.id,
+        userId: u.id,
         type: "OT_SUBMITTED",
-        title: "New OT Entry",
-        message: `${params.employeeName} · ${params.workDate} submitted by ${params.submittedByName}`,
+        title: "New OT Entry Submitted",
+        message: `${params.employeeName} · ${params.workDate} — by ${params.submittedByName}`,
         entityId: params.entryId,
         entityType: "OtEntry",
       }),
@@ -53,17 +73,22 @@ export async function notifyApprovers(params: {
 // Notify the creator of an entry when it's approved or rejected
 export async function notifyEntryDecision(params: {
   createdById: string;
+  decidedByUserId: string; // don't notify if deciding own entry
   employeeName: string;
   workDate: string;
   entryId: string;
   decision: "APPROVED" | "REJECTED";
   reason?: string | null;
 }) {
+  // Don't notify if the person approving is the same as who created it
+  if (params.createdById === params.decidedByUserId) return;
+
   const isApproved = params.decision === "APPROVED";
+
   await createNotification({
     userId: params.createdById,
     type: isApproved ? "OT_APPROVED" : "OT_REJECTED",
-    title: isApproved ? "OT Entry Approved" : "OT Entry Rejected",
+    title: isApproved ? "OT Entry Approved ✓" : "OT Entry Rejected",
     message: `${params.employeeName} · ${params.workDate}${params.reason ? ` — ${params.reason}` : ""}`,
     entityId: params.entryId,
     entityType: "OtEntry",
