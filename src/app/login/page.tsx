@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Clock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Database } from "@deemlol/next-icons";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,7 +14,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   // DB Status
   const [dbStatus, setDbStatus] = useState<"loading" | "ok" | "error">(
@@ -39,7 +39,6 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setError("");
 
     const res = await signIn("credentials", {
       username,
@@ -50,9 +49,10 @@ export default function LoginPage() {
     setLoading(false);
 
     if (res?.ok) {
+      toast.success("Login successful.");
       router.push("/dashboard");
     } else {
-      setError("Invalid username or password.");
+      toast.error("Invalid username or password.");
     }
   }
 
@@ -262,23 +262,6 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
-
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--status-rejected-bg)",
-                border: "1px solid var(--status-rejected-border)",
-                fontSize: 12.5,
-                color: "var(--status-rejected-text)",
-              }}
-            >
-              {error}
-            </motion.div>
-          )}
 
           <button
             type="submit"

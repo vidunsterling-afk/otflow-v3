@@ -425,14 +425,21 @@ export function NotificationBell() {
                     <div
                       style={{
                         padding: "32px 0",
-                        textAlign: "center",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
                         color: "var(--text-muted)",
                         fontSize: 13,
+                        textAlign: "center",
                       }}
                     >
                       <Bell
                         size={24}
-                        style={{ opacity: 0.2, marginBottom: 8 }}
+                        style={{
+                          opacity: 0.2,
+                        }}
                       />
                       <div>No notifications</div>
                     </div>
