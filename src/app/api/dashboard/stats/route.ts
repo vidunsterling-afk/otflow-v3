@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, format } from "date-fns";
+import { startOfWeek, endOfWeek, format } from "date-fns";
 
 export async function GET() {
   const session = await auth();
@@ -12,27 +12,23 @@ export async function GET() {
 
   const now = new Date();
   const todayStr = format(now, "yyyy-MM-dd");
-
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
   const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
 
-  const [
-    totalPending,
-    totalApproved,
-    totalRejected,
-    todayEntries,
-    weekEntries,
-    totalEmployees,
-    recentEntries,
-    pendingByDay,
-  ] = await Promise.all([
-    prisma.otEntry.count({ where: { status: "PENDING" } }),
-    prisma.otEntry.count({ where: { status: "APPROVED" } }),
-    prisma.otEntry.count({ where: { status: "REJECTED" } }),
-    prisma.otEntry.count({ where: { workDate: todayStr } }),
-    prisma.otEntry.count({
-      where: { workDate: { gte: weekStart, lte: weekEnd } },
-    }),
+  // Single raw query replaces 8 parallel Prisma calls
+  const [stats]: any[] = await prisma.$queryRaw`
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'PENDING')                              AS "totalPending",
+      COUNT(*) FILTER (WHERE status = 'APPROVED')                             AS "totalApproved",
+      COUNT(*) FILTER (WHERE status = 'REJECTED')                             AS "totalRejected",
+      COUNT(*) FILTER (WHERE "workDate" = ${todayStr})                        AS "todayEntries",
+      COUNT(*) FILTER (WHERE "workDate" BETWEEN ${weekStart} AND ${weekEnd})  AS "weekEntries",
+      COALESCE(SUM("approvedTotalMinutes") FILTER (WHERE status = 'APPROVED'), 0) AS "totalApprovedMinutes"
+    FROM "OtEntry"
+  `;
+
+  // These two still need separate queries but are lightweight
+  const [totalEmployees, recentEntries, pendingByDay] = await Promise.all([
     prisma.employee.count({ where: { isDeleted: false } }),
     prisma.otEntry.findMany({
       take: 8,
@@ -41,28 +37,20 @@ export async function GET() {
     }),
     prisma.otEntry.groupBy({
       by: ["workDate"],
-      where: {
-        status: "PENDING",
-        workDate: { gte: weekStart, lte: weekEnd },
-      },
+      where: { status: "PENDING", workDate: { gte: weekStart, lte: weekEnd } },
       _count: { _all: true },
       orderBy: { workDate: "asc" },
     }),
   ]);
 
-  const approvedMinutes = await prisma.otEntry.aggregate({
-    where: { status: "APPROVED" },
-    _sum: { approvedTotalMinutes: true },
-  });
-
   return NextResponse.json({
-    totalPending,
-    totalApproved,
-    totalRejected,
-    todayEntries,
-    weekEntries,
+    totalPending: Number(stats.totalPending),
+    totalApproved: Number(stats.totalApproved),
+    totalRejected: Number(stats.totalRejected),
+    todayEntries: Number(stats.todayEntries),
+    weekEntries: Number(stats.weekEntries),
+    totalApprovedMinutes: Number(stats.totalApprovedMinutes),
     totalEmployees,
-    totalApprovedMinutes: approvedMinutes._sum.approvedTotalMinutes ?? 0,
     recentEntries,
     pendingByDay,
     weekStart,
