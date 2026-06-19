@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
@@ -5,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 4 * 60 },
   pages: { signIn: "/login" },
   providers: [
     Credentials({
@@ -43,7 +44,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.username = (user as any).username;
@@ -51,6 +52,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.roleName = (user as any).roleName;
         token.permissions = (user as any).permissions;
         token.canApprove = (user as any).canApprove;
+      }
+      // When update() is called from client, refresh the token expiry
+      if (trigger === "update") {
+        token.iat = Math.floor(Date.now() / 1000);
       }
       return token;
     },

@@ -4,6 +4,7 @@ import { signOut } from "next-auth/react";
 import { Bell, LogOut, User } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { SessionCountdown } from "@/components/layout/SessionCountdown";
 
 interface TopbarProps {
   user: {
@@ -41,6 +42,9 @@ export function Topbar({ user }: TopbarProps) {
 
       {/* Right */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* Session countdown */}
+        <SessionCountdown />
+
         {/* Notification Bell */}
         <button
           style={{
