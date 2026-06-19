@@ -63,22 +63,30 @@ function bar(cur: number, tot: number, w = 32): string {
 
 // ── PostgreSQL pool ───────────────────────────────────────────────────────────
 function makePgPool(): Pool {
-  const url =
+  // For CLI: prefer pooler URL since direct host may be blocked by corporate networks
+  // Strip pgbouncer param — not needed for pg driver directly
+  const rawUrl =
     process.env.MIGRATION_DB_URL ??
-    process.env.DIRECT_URL ??
-    process.env.DATABASE_URL;
-  if (!url) {
-    console.error("\nERROR: No DATABASE_URL or DIRECT_URL found.\n");
-    console.error("Make sure .env or .env.local has DIRECT_URL set.\n");
+    process.env.DATABASE_URL ??
+    process.env.DIRECT_URL;
+
+  if (!rawUrl) {
+    console.error("\nERROR: No DATABASE_URL found.\n");
     process.exit(1);
   }
-  // Show which URL is being used (masked)
-  const masked = url.replace(/:([^:@]+)@/, ":***@");
+
+  // Remove pgbouncer=true if present — pg driver doesn't need it
+  const url = rawUrl.replace(/[?&]pgbouncer=true/g, "").replace(/\?$/, "");
+
+  const masked = url.replace(/:([^:@\s]+)@/, ":***@");
   console.log(chalk.gray(`  Using DB: ${masked}`));
+
   return new Pool({
     connectionString: url,
-    max: 5,
+    max: 3,
     ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
   });
 }
 
