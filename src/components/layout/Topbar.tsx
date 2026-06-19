@@ -1,10 +1,11 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, LogOut, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SessionCountdown } from "@/components/layout/SessionCountdown";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 interface TopbarProps {
   user: {
@@ -46,30 +47,7 @@ export function Topbar({ user }: TopbarProps) {
         <SessionCountdown />
 
         {/* Notification Bell */}
-        <button
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: "var(--radius-md)",
-            border: "1px solid var(--border-base)",
-            background: "transparent",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            color: "var(--text-secondary)",
-            transition: "background 0.15s",
-          }}
-          onMouseEnter={(e) =>
-            ((e.currentTarget as HTMLElement).style.background =
-              "var(--bg-muted)")
-          }
-          onMouseLeave={(e) =>
-            ((e.currentTarget as HTMLElement).style.background = "transparent")
-          }
-        >
-          <Bell size={15} />
-        </button>
+        <NotificationBell />
 
         {/* User menu */}
         <div style={{ position: "relative" }}>

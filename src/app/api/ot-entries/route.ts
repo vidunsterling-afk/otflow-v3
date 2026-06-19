@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { notifyApprovers } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 import { calcOtMinutes } from "@/lib/otCalc";
 import { Prisma } from "@prisma/client";
@@ -73,6 +76,18 @@ export async function POST(req: NextRequest) {
   // ── Single: body is an object (existing behaviour) ────────────────
   try {
     const entry = await createSingleEntry(body, session);
+    try {
+      const creator = await prisma.user.findUnique({
+        where: { id: (session.user as any).id },
+        select: { username: true },
+      });
+      await notifyApprovers({
+        submittedByName: creator?.username ?? "Someone",
+        employeeName: entry.employee.name,
+        workDate: entry.workDate,
+        entryId: entry.id,
+      });
+    } catch {}
     return NextResponse.json(entry, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? "Failed" }, { status: 400 });

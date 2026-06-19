@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { notifyEntryDecision } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 import { calcOtMinutes } from "@/lib/otCalc";
 
@@ -84,6 +86,19 @@ export async function PATCH(
       },
     });
 
+    try {
+      if (existing.createdById) {
+        await notifyEntryDecision({
+          createdById: existing.createdById,
+          employeeName: updated.employee.name,
+          workDate: updated.workDate,
+          entryId: id,
+          decision: "APPROVED",
+          reason: body.decisionReason,
+        });
+      }
+    } catch {}
+
     return NextResponse.json(updated);
   }
 
@@ -114,6 +129,19 @@ export async function PATCH(
         diff: { before: existing, after: updated },
       },
     });
+
+    try {
+      if (existing.createdById) {
+        await notifyEntryDecision({
+          createdById: existing.createdById,
+          employeeName: updated.employee.name,
+          workDate: updated.workDate,
+          entryId: id,
+          decision: "REJECTED",
+          reason: body.decisionReason,
+        });
+      }
+    } catch {}
 
     return NextResponse.json(updated);
   }
