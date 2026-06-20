@@ -15,6 +15,7 @@ import {
   MessageSquare,
   ChevronDown,
   Database,
+  ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -52,7 +53,13 @@ const NAV_ITEMS = [
         href: "/admin/decision-reasons",
         label: "Decision Reasons",
         icon: MessageSquare,
-        permission: PERMISSIONS.ADMIN_ROLES, // adjust permission if needed
+        permission: PERMISSIONS.OT_VIEW,
+      },
+      {
+        href: "/fingerprint",
+        label: "Fingerprint Logs",
+        icon: ScanLine,
+        permission: PERMISSIONS.OT_CREATE,
       },
     ],
   },
