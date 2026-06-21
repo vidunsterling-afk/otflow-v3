@@ -14,53 +14,144 @@ import {
   X,
   Settings2,
   Info,
-  AlertTriangle,
   Moon,
-  Coffee,
-  Zap,
   Clock,
+  HelpCircle,
   ChevronDown,
   ChevronUp,
-  HelpCircle,
+  Sun,
+  Sunset,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { FormField, Input } from "@/components/ui/FormField";
 import { Btn } from "@/components/admin/PrimaryBtn";
 import { Modal } from "@/components/ui/Modal";
-import { motion as m } from "framer-motion";
 
-type LogType = "IN" | "OUT" | "BREAK_OUT" | "BREAK_IN";
+type LogType = "IN" | "OUT" | "MIDDLE";
 
-interface Log {
+interface ProcessedLog {
   empId: string;
   date: string;
   time: string;
+  hour: number;
   type: LogType;
-  shiftIndex: number;
-  note?: string;
+  shift: string;
+  note: string;
 }
 
 interface FingerprintSettings {
-  shiftGapHours: number;
-  breakMaxMinutes: number;
-  enableBreakTracking: boolean;
-  nightShiftMode: boolean;
-  firstPunchIsIn: boolean;
-  minShiftMinutes: number;
+  nightOutStartHour: number;
+  nightOutEndHour: number;
+  morningInStartHour: number;
+  morningInEndHour: number;
+  eveningOutStartHour: number;
+  eveningOutEndHour: number;
+  middlePunchMode: "ignore" | "label";
+  shift1StartHour: number;
+  shift1EndHour: number;
+  shift2StartHour: number;
+  shift2EndHour: number;
 }
 
 const DEFAULT_SETTINGS: FingerprintSettings = {
-  shiftGapHours: 5,
-  breakMaxMinutes: 60,
-  enableBreakTracking: false,
-  nightShiftMode: false,
-  firstPunchIsIn: true,
-  minShiftMinutes: 1,
+  nightOutStartHour: 0,
+  nightOutEndHour: 5,
+  morningInStartHour: 6,
+  morningInEndHour: 11,
+  eveningOutStartHour: 13,
+  eveningOutEndHour: 23,
+  middlePunchMode: "ignore",
+  shift1StartHour: 5,
+  shift1EndHour: 7,
+  shift2StartHour: 8,
+  shift2EndHour: 11,
 };
 
-// ── Setting explanation card ──────────────────────────────────────────────────
-function SettingCard({
+// ── Hour picker ───────────────────────────────────────────────────────────────
+function HourRange({
+  startVal,
+  endVal,
+  onStartChange,
+  onEndChange,
+  startLabel,
+  endLabel,
+}: {
+  startVal: number;
+  endVal: number;
+  onStartChange: (v: number) => void;
+  onEndChange: (v: number) => void;
+  startLabel: string;
+  endLabel: string;
+}) {
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const fmt = (h: number) => `${String(h).padStart(2, "0")}:00`;
+
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+      <div style={{ flex: 1 }}>
+        <div
+          style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}
+        >
+          {startLabel}
+        </div>
+        <select
+          value={startVal}
+          onChange={(e) => onStartChange(Number(e.target.value))}
+          style={{
+            width: "100%",
+            padding: "7px 10px",
+            border: "1px solid var(--border-base)",
+            borderRadius: "var(--radius-md)",
+            fontSize: 13,
+            color: "var(--text-primary)",
+            background: "var(--bg-base)",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          {hours.map((h) => (
+            <option key={h} value={h}>
+              {fmt(h)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={{ color: "var(--text-muted)", marginTop: 16 }}>→</div>
+      <div style={{ flex: 1 }}>
+        <div
+          style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}
+        >
+          {endLabel}
+        </div>
+        <select
+          value={endVal}
+          onChange={(e) => onEndChange(Number(e.target.value))}
+          style={{
+            width: "100%",
+            padding: "7px 10px",
+            border: "1px solid var(--border-base)",
+            borderRadius: "var(--radius-md)",
+            fontSize: 13,
+            color: "var(--text-primary)",
+            background: "var(--bg-base)",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          {hours.map((h) => (
+            <option key={h} value={h}>
+              {fmt(h)}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+// ── Setting block ─────────────────────────────────────────────────────────────
+function Block({
   icon: Icon,
   iconColor,
   iconBg,
@@ -68,7 +159,6 @@ function SettingCard({
   description,
   example,
   children,
-  advanced,
 }: {
   icon: any;
   iconColor: string;
@@ -77,7 +167,6 @@ function SettingCard({
   description: string;
   example?: string;
   children: React.ReactNode;
-  advanced?: boolean;
 }) {
   return (
     <div
@@ -88,7 +177,6 @@ function SettingCard({
         background: "var(--bg-card)",
       }}
     >
-      {/* Header */}
       <div
         style={{
           padding: "14px 16px",
@@ -96,7 +184,6 @@ function SettingCard({
           display: "flex",
           alignItems: "flex-start",
           gap: 12,
-          background: advanced ? "var(--bg-muted)" : "var(--bg-card)",
         }}
       >
         <div
@@ -113,33 +200,15 @@ function SettingCard({
         >
           <Icon size={16} color={iconColor} />
         </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div
-              style={{
-                fontSize: 13.5,
-                fontWeight: 700,
-                color: "var(--text-primary)",
-              }}
-            >
-              {title}
-            </div>
-            {advanced && (
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  padding: "1px 5px",
-                  borderRadius: 99,
-                  background: "var(--brand-100)",
-                  color: "var(--brand-600)",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                }}
-              >
-                Advanced
-              </span>
-            )}
+        <div>
+          <div
+            style={{
+              fontSize: 13.5,
+              fontWeight: 700,
+              color: "var(--text-primary)",
+            }}
+          >
+            {title}
           </div>
           <div
             style={{
@@ -169,146 +238,7 @@ function SettingCard({
           )}
         </div>
       </div>
-      {/* Control */}
       <div style={{ padding: "14px 16px" }}>{children}</div>
-    </div>
-  );
-}
-
-// ── Toggle switch ─────────────────────────────────────────────────────────────
-function Toggle({
-  value,
-  onChange,
-  label,
-  onLabel = "On",
-  offLabel = "Off",
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  label?: string;
-  onLabel?: string;
-  offLabel?: string;
-}) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <button
-        onClick={() => onChange(!value)}
-        style={{
-          width: 48,
-          height: 26,
-          borderRadius: 99,
-          background: value ? "var(--brand-500)" : "var(--border-strong)",
-          border: "none",
-          cursor: "pointer",
-          position: "relative",
-          transition: "background 0.2s",
-          flexShrink: 0,
-        }}
-      >
-        <motion.div
-          animate={{ left: value ? 24 : 2 }}
-          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          style={{
-            position: "absolute",
-            top: 3,
-            width: 20,
-            height: 20,
-            borderRadius: "50%",
-            background: "white",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-          }}
-        />
-      </button>
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: value ? "var(--brand-600)" : "var(--text-muted)",
-        }}
-      >
-        {value ? onLabel : offLabel}
-      </span>
-      {label && (
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {label}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ── Number slider ─────────────────────────────────────────────────────────────
-function NumberSlider({
-  value,
-  onChange,
-  min,
-  max,
-  step = 1,
-  unit,
-  lowLabel,
-  highLabel,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-  step?: number;
-  unit: string;
-  lowLabel?: string;
-  highLabel?: string;
-}) {
-  const pct = ((value - min) / (max - min)) * 100;
-
-  return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          marginBottom: 8,
-        }}
-      >
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          style={{
-            flex: 1,
-            accentColor: "var(--brand-500)",
-            cursor: "pointer",
-          }}
-        />
-        <div
-          style={{
-            minWidth: 64,
-            padding: "4px 10px",
-            background: "var(--brand-50)",
-            border: "1px solid var(--brand-100)",
-            borderRadius: "var(--radius-sm)",
-            fontSize: 13,
-            fontWeight: 700,
-            color: "var(--brand-600)",
-            textAlign: "center",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {value} {unit}
-        </div>
-      </div>
-      {(lowLabel || highLabel) && (
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            {lowLabel}
-          </span>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            {highLabel}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
@@ -325,19 +255,19 @@ function SettingsModal({
   settings: FingerprintSettings;
   onSave: (s: FingerprintSettings) => void;
 }) {
-  const [local, setLocal] = useState<FingerprintSettings>(settings);
+  const [local, setLocal] = useState(settings);
   const [saving, setSaving] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showShiftSettings, setShowShiftSettings] = useState(false);
 
   useEffect(() => {
     setLocal(settings);
   }, [settings, open]);
 
-  function update<K extends keyof FingerprintSettings>(
-    key: K,
-    val: FingerprintSettings[K],
+  function set<K extends keyof FingerprintSettings>(
+    k: K,
+    v: FingerprintSettings[K],
   ) {
-    setLocal((p) => ({ ...p, [key]: val }));
+    setLocal((p) => ({ ...p, [k]: v }));
   }
 
   async function handleSave() {
@@ -348,100 +278,241 @@ function SettingsModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(local),
       });
-      if (!res.ok) throw new Error("Failed to save");
+      if (!res.ok) throw new Error();
       onSave(local);
-      toast.success("Settings saved — re-upload your file to apply changes");
+      toast.success("Settings saved — re-upload your file to apply");
       onClose();
     } catch {
-      toast.error("Failed to save settings");
+      toast.error("Failed to save");
     } finally {
       setSaving(false);
     }
   }
 
-  function handleReset() {
-    setLocal(DEFAULT_SETTINGS);
-    toast.info("Reset to defaults — click Save to apply");
-  }
+  // Preview of current time windows
+  const fmt = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Fingerprint Algorithm Settings"
-      subtitle="Configure how the system interprets punch records"
-      width={580}
+      subtitle="Tell the system what each scan means based on time of day"
+      width={600}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* Info banner */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* How it works banner */}
         <div
           style={{
-            padding: "10px 12px",
+            padding: "12px 14px",
             background: "var(--brand-50)",
             border: "1px solid var(--brand-100)",
             borderRadius: "var(--radius-md)",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
           }}
         >
-          <Info
-            size={13}
-            color="var(--brand-500)"
-            style={{ flexShrink: 0, marginTop: 2 }}
-          />
           <div
             style={{
               fontSize: 12.5,
+              fontWeight: 700,
               color: "var(--brand-700)",
-              lineHeight: 1.6,
+              marginBottom: 6,
             }}
           >
-            These settings control how the system figures out whether each
-            fingerprint scan is an arrival (IN) or departure (OUT). If your
-            results look wrong, adjust these settings to match how your
-            workplace operates.
-            <strong> After changing settings, re-upload your file</strong> to
-            see updated results.
+            How this works
+          </div>
+          <div
+            style={{ fontSize: 12, color: "var(--brand-700)", lineHeight: 1.7 }}
+          >
+            The fingerprint machine records every scan but doesn't reliably tell
+            us if it's an arrival or departure. Instead, we use the{" "}
+            <strong>time of day</strong> to figure that out. You define three
+            time windows below — the system uses them to classify every scan
+            automatically.
+          </div>
+          {/* Visual timeline */}
+          <div
+            style={{
+              marginTop: 10,
+              padding: "10px 12px",
+              background: "white",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--brand-100)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                marginBottom: 6,
+                fontWeight: 600,
+              }}
+            >
+              Current time windows:
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[
+                {
+                  label: "Night OUT",
+                  range: `${fmt(local.nightOutStartHour)} – ${fmt(local.nightOutEndHour)}`,
+                  bg: "var(--brand-50)",
+                  color: "var(--brand-600)",
+                  icon: "🌙",
+                },
+                {
+                  label: "Morning IN",
+                  range: `${fmt(local.morningInStartHour)} – ${fmt(local.morningInEndHour)}`,
+                  bg: "var(--status-approved-bg)",
+                  color: "var(--status-approved-text)",
+                  icon: "🌅",
+                },
+                {
+                  label: "Evening OUT",
+                  range: `${fmt(local.eveningOutStartHour)} – ${fmt(local.eveningOutEndHour)}`,
+                  bg: "var(--status-rejected-bg)",
+                  color: "var(--status-rejected-text)",
+                  icon: "🌇",
+                },
+              ].map(({ label, range, bg, color, icon }) => (
+                <div
+                  key={label}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: "var(--radius-sm)",
+                    background: bg,
+                    fontSize: 11.5,
+                    color,
+                    fontWeight: 600,
+                  }}
+                >
+                  {icon} {label}: {range}
+                </div>
+              ))}
+              <div
+                style={{
+                  padding: "5px 10px",
+                  borderRadius: "var(--radius-sm)",
+                  background: "var(--bg-muted)",
+                  fontSize: 11.5,
+                  color: "var(--text-muted)",
+                  fontWeight: 600,
+                }}
+              >
+                ⏱ Middle: everything else (
+                {local.middlePunchMode === "ignore" ? "ignored" : "labeled"})
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ── Setting 1: First punch ─────────────────────────── */}
-        <SettingCard
-          icon={Zap}
+        {/* ── Window 1: Night OUT ──────────────────────────────── */}
+        <Block
+          icon={Moon}
           iconColor="var(--brand-600)"
           iconBg="var(--brand-50)"
-          title="What does the first scan of the day mean?"
-          description="When an employee scans for the very first time on a given day, should the system treat it as them arriving (IN) or leaving (OUT)?"
-          example='If your staff arrive and scan in the morning, choose "Arriving (IN)". If your file captures people leaving from a night shift first, choose "Leaving (OUT)".'
+          title="🌙 Night OUT window — end of night shift"
+          description="Scans that happen late at night or just after midnight mean the employee is leaving after a night shift. The system will label these as OUT and link them to the previous calendar day."
+          example="Employee works until 00:30 AM. Their midnight scan is OUT for the shift that started the previous evening."
+        >
+          <HourRange
+            startVal={local.nightOutStartHour}
+            endVal={local.nightOutEndHour}
+            onStartChange={(v) => set("nightOutStartHour", v)}
+            onEndChange={(v) => set("nightOutEndHour", v)}
+            startLabel="Night OUT starts from"
+            endLabel="Night OUT ends before"
+          />
+          <div
+            style={{
+              marginTop: 8,
+              padding: "7px 10px",
+              background: "var(--bg-muted)",
+              borderRadius: "var(--radius-sm)",
+              fontSize: 11.5,
+              color: "var(--text-muted)",
+            }}
+          >
+            💡 Scans in this window are automatically moved to the{" "}
+            <strong>previous day</strong> in the output. For your data: most
+            midnight punches are around 00:00–00:35.
+          </div>
+        </Block>
+
+        {/* ── Window 2: Morning IN ─────────────────────────────── */}
+        <Block
+          icon={Sun}
+          iconColor="var(--status-approved-text)"
+          iconBg="var(--status-approved-bg)"
+          title="🌅 Morning IN window — start of day shift"
+          description="Scans in the morning mean the employee is arriving for their day shift. The system labels these as IN."
+          example="Shift 1 employees arrive around 6:30 AM, Shift 2 around 8:30 AM — both fall in this morning window."
+        >
+          <HourRange
+            startVal={local.morningInStartHour}
+            endVal={local.morningInEndHour}
+            onStartChange={(v) => set("morningInStartHour", v)}
+            onEndChange={(v) => set("morningInEndHour", v)}
+            startLabel="Morning IN starts from"
+            endLabel="Morning IN ends before"
+          />
+        </Block>
+
+        {/* ── Window 3: Evening OUT ────────────────────────────── */}
+        <Block
+          icon={Sunset}
+          iconColor="var(--status-rejected-text)"
+          iconBg="var(--status-rejected-bg)"
+          title="🌇 Evening OUT window — end of day shift"
+          description="Scans in the afternoon or evening mean the employee is leaving after their day shift. The system labels these as OUT."
+          example="Shift 1 leaves around 3:30 PM, Shift 2 leaves around 5:30 PM — both fall in this evening window."
+        >
+          <HourRange
+            startVal={local.eveningOutStartHour}
+            endVal={local.eveningOutEndHour}
+            onStartChange={(v) => set("eveningOutStartHour", v)}
+            onEndChange={(v) => set("eveningOutEndHour", v)}
+            startLabel="Evening OUT starts from"
+            endLabel="Evening OUT ends before"
+          />
+        </Block>
+
+        {/* ── Middle punches ───────────────────────────────────── */}
+        <Block
+          icon={Clock}
+          iconColor="var(--status-pending-text)"
+          iconBg="var(--status-pending-bg)"
+          title="⏱ Middle-of-day punches — lunch, errands, etc."
+          description="Sometimes an employee scans during the middle of their shift — for example, going out for lunch and coming back. These punches don't fit the morning IN or evening OUT windows. What should the system do with them?"
+          example="Employee scans at 12:30 PM while already IN for the day. This is likely a lunch trip."
         >
           <div style={{ display: "flex", gap: 10 }}>
             {[
               {
-                val: true,
-                label: "🟢 Arriving (IN)",
-                sub: "Most common — staff arrive first",
+                val: "ignore" as const,
+                label: "Show as MIDDLE (no count)",
+                sub: "Show middle scans in the table labeled MIDDLE but don't count them in shift totals.",
+                icon: "👁️",
               },
               {
-                val: false,
-                label: "🔴 Leaving (OUT)",
-                sub: "Night shift ending first",
+                val: "label" as const,
+                label: "Show them as MIDDLE",
+                sub: "Include them in the output labeled as MIDDLE. Useful if you want to track who went out.",
+                icon: "🏷️",
               },
-            ].map(({ val, label, sub }) => (
+            ].map(({ val, label, sub, icon }) => (
               <button
-                key={String(val)}
-                onClick={() => update("firstPunchIsIn", val)}
+                key={val}
+                onClick={() => set("middlePunchMode", val)}
                 style={{
                   flex: 1,
                   padding: "10px 12px",
-                  border: `2px solid ${local.firstPunchIsIn === val ? "var(--brand-400)" : "var(--border-base)"}`,
+                  textAlign: "left",
+                  border: `2px solid ${local.middlePunchMode === val ? "var(--brand-400)" : "var(--border-base)"}`,
                   borderRadius: "var(--radius-md)",
                   background:
-                    local.firstPunchIsIn === val
+                    local.middlePunchMode === val
                       ? "var(--brand-50)"
                       : "var(--bg-muted)",
                   cursor: "pointer",
-                  textAlign: "left",
                   transition: "all 0.15s",
                 }}
               >
@@ -450,163 +521,28 @@ function SettingsModal({
                     fontSize: 13,
                     fontWeight: 700,
                     color: "var(--text-primary)",
-                    marginBottom: 2,
+                    marginBottom: 3,
                   }}
                 >
-                  {label}
+                  {icon} {label}
                 </div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    color: "var(--text-muted)",
+                    lineHeight: 1.5,
+                  }}
+                >
                   {sub}
                 </div>
               </button>
             ))}
           </div>
-        </SettingCard>
+        </Block>
 
-        {/* ── Setting 2: Shift gap ────────────────────────────── */}
-        <SettingCard
-          icon={Clock}
-          iconColor="var(--status-pending-text)"
-          iconBg="var(--status-pending-bg)"
-          title="How long is a normal break between shifts?"
-          description="If two scans from the same person are more than this many hours apart, the system assumes a new shift has started — the first scan after the gap is treated as a new IN."
-          example="If you set this to 5 hours: an employee who scans at 17:30 (OUT) and then again at 22:00 (less than 5h gap) is seen as still in the same day. But if they scan next at 07:00 next morning (14h gap), that is treated as a new shift starting."
-        >
-          <NumberSlider
-            value={local.shiftGapHours}
-            onChange={(v) => update("shiftGapHours", v)}
-            min={1}
-            max={16}
-            step={0.5}
-            unit="hours"
-            lowLabel="1 hour (strict)"
-            highLabel="16 hours (loose)"
-          />
-          <div
-            style={{
-              marginTop: 10,
-              padding: "8px 10px",
-              background: "var(--bg-muted)",
-              borderRadius: "var(--radius-sm)",
-              fontSize: 12,
-              color: "var(--text-secondary)",
-            }}
-          >
-            💡 <strong>Recommended:</strong> Set this to roughly half the time
-            between your shift end and next shift start. For a 9-to-5 workplace
-            that means about 5–6 hours works well.
-          </div>
-        </SettingCard>
-
-        {/* ── Setting 3: Break tracking ───────────────────────── */}
-        <SettingCard
-          icon={Coffee}
-          iconColor="var(--status-approved-text)"
-          iconBg="var(--status-approved-bg)"
-          title="Do employees scan when taking breaks?"
-          description="If your staff punch out when going for lunch and punch back in when they return, turn this ON. The system will label those short absences as BREAK_OUT and BREAK_IN instead of treating them as shift endings."
-          example="Staff leaves for lunch at 12:30 (BREAK_OUT) and returns at 13:15 (BREAK_IN). Without this ON, the system would think they left work at 12:30."
-        >
-          <Toggle
-            value={local.enableBreakTracking}
-            onChange={(v) => update("enableBreakTracking", v)}
-            onLabel="Yes, staff scan for breaks"
-            offLabel="No, only scan start/end of shift"
-          />
-
-          <AnimatePresence>
-            {local.enableBreakTracking && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                style={{ overflow: "hidden", marginTop: 14 }}
-              >
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: "var(--text-secondary)",
-                    marginBottom: 8,
-                    fontWeight: 500,
-                  }}
-                >
-                  Maximum break duration
-                  <span
-                    style={{
-                      fontSize: 11.5,
-                      fontWeight: 400,
-                      color: "var(--text-muted)",
-                      marginLeft: 6,
-                    }}
-                  >
-                    (scans closer together than this are treated as a break)
-                  </span>
-                </div>
-                <NumberSlider
-                  value={local.breakMaxMinutes}
-                  onChange={(v) => update("breakMaxMinutes", v)}
-                  min={15}
-                  max={240}
-                  step={15}
-                  unit="minutes"
-                  lowLabel="15 min (short breaks only)"
-                  highLabel="4 hours (long breaks)"
-                />
-                <div
-                  style={{
-                    marginTop: 8,
-                    padding: "8px 10px",
-                    background: "var(--status-approved-bg)",
-                    border: "1px solid var(--status-approved-border)",
-                    borderRadius: "var(--radius-sm)",
-                    fontSize: 12,
-                    color: "var(--status-approved-text)",
-                  }}
-                >
-                  💡 Set this to your longest allowed break. If lunch is max 1
-                  hour, set 60 minutes.
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </SettingCard>
-
-        {/* ── Setting 4: Night shift ──────────────────────────── */}
-        <SettingCard
-          icon={Moon}
-          iconColor="var(--brand-500)"
-          iconBg="var(--brand-50)"
-          title="Do you have night shifts that go past midnight?"
-          description="If your employees start work late at night (e.g. 10 PM) and finish in the early hours of the next morning (e.g. 6 AM), turn this ON. The system will group those early-morning scans with the previous night instead of treating them as a new day."
-          example="A night shift starts at 22:00 on Monday and ends at 06:00 on Tuesday. With this ON, the Tuesday 06:00 scan is grouped with Monday's shift, not Tuesday's."
-        >
-          <Toggle
-            value={local.nightShiftMode}
-            onChange={(v) => update("nightShiftMode", v)}
-            onLabel="Yes, we have night shifts crossing midnight"
-            offLabel="No, all shifts finish before midnight"
-          />
-          {local.nightShiftMode && (
-            <div
-              style={{
-                marginTop: 10,
-                padding: "8px 10px",
-                background: "var(--status-pending-bg)",
-                border: "1px solid var(--status-pending-border)",
-                borderRadius: "var(--radius-sm)",
-                fontSize: 12,
-                color: "var(--status-pending-text)",
-              }}
-            >
-              ⚠️ Scans between 12:00 AM and 5:59 AM will be grouped with the
-              previous day's shift.
-            </div>
-          )}
-        </SettingCard>
-
-        {/* ── Advanced section toggle ─────────────────────────── */}
+        {/* ── Shift detection (collapsible) ────────────────────── */}
         <button
-          onClick={() => setShowAdvanced((p) => !p)}
+          onClick={() => setShowShiftSettings((p) => !p)}
           style={{
             display: "flex",
             alignItems: "center",
@@ -619,11 +555,16 @@ function SettingsModal({
             fontSize: 13,
             fontWeight: 600,
             color: "var(--text-secondary)",
+            width: "100%",
           }}
         >
           <Settings2 size={14} />
-          Advanced Settings
-          {showAdvanced ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          Shift Detection Settings
+          {showShiftSettings ? (
+            <ChevronUp size={13} />
+          ) : (
+            <ChevronDown size={13} />
+          )}
           <span
             style={{
               marginLeft: "auto",
@@ -632,38 +573,94 @@ function SettingsModal({
               color: "var(--text-muted)",
             }}
           >
-            For unusual setups — most users don't need these
+            Which arrival times = Shift 1 vs Shift 2
           </span>
         </button>
 
         <AnimatePresence>
-          {showAdvanced && (
+          {showShiftSettings && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               style={{ overflow: "hidden" }}
             >
-              <SettingCard
+              <Block
                 icon={AlertTriangle}
-                iconColor="var(--status-rejected-text)"
-                iconBg="var(--status-rejected-bg)"
-                title="Ignore double-scans (noise filter)"
-                description="Sometimes a fingerprint machine records the same person twice within seconds — this is called a 'double tap'. Set a minimum time gap below which duplicate scans are ignored automatically."
-                example="If someone's finger scans twice within 30 seconds by accident, only the first scan is kept."
-                advanced
+                iconColor="var(--brand-600)"
+                iconBg="var(--brand-50)"
+                title="Shift 1 vs Shift 2 detection"
+                description="When an employee arrives in the morning, the system can automatically figure out which shift they're on based on what time they arrived. Set the arrival time ranges for each shift below."
+                example="Shift 1 starts at 6:30 AM so anyone arriving between 5:00–7:59 AM is Shift 1. Shift 2 starts at 8:30 AM so anyone arriving 8:00–11:59 AM is Shift 2."
               >
-                <NumberSlider
-                  value={local.minShiftMinutes}
-                  onChange={(v) => update("minShiftMinutes", v)}
-                  min={0}
-                  max={10}
-                  step={1}
-                  unit="minutes"
-                  lowLabel="0 min (keep all scans)"
-                  highLabel="10 min (filter close scans)"
-                />
-              </SettingCard>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 14 }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "var(--brand-600)",
+                        marginBottom: 8,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          padding: "1px 7px",
+                          borderRadius: 99,
+                          background: "var(--brand-50)",
+                          border: "1px solid var(--brand-100)",
+                          fontSize: 11,
+                        }}
+                      >
+                        Shift 1 — starts 6:30 AM
+                      </span>
+                    </div>
+                    <HourRange
+                      startVal={local.shift1StartHour}
+                      endVal={local.shift1EndHour}
+                      onStartChange={(v) => set("shift1StartHour", v)}
+                      onEndChange={(v) => set("shift1EndHour", v)}
+                      startLabel="Arrivals from"
+                      endLabel="Arrivals until"
+                    />
+                  </div>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "var(--status-pending-text)",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          padding: "1px 7px",
+                          borderRadius: 99,
+                          background: "var(--status-pending-bg)",
+                          border: "1px solid var(--status-pending-border)",
+                          fontSize: 11,
+                        }}
+                      >
+                        Shift 2 — starts 8:30 AM
+                      </span>
+                    </div>
+                    <HourRange
+                      startVal={local.shift2StartHour}
+                      endVal={local.shift2EndHour}
+                      onStartChange={(v) => set("shift2StartHour", v)}
+                      onEndChange={(v) => set("shift2EndHour", v)}
+                      startLabel="Arrivals from"
+                      endLabel="Arrivals until"
+                    />
+                  </div>
+                </div>
+              </Block>
             </motion.div>
           )}
         </AnimatePresence>
@@ -676,11 +673,10 @@ function SettingsModal({
             justifyContent: "space-between",
             paddingTop: 4,
             borderTop: "1px solid var(--border-base)",
-            marginTop: 4,
           }}
         >
           <button
-            onClick={handleReset}
+            onClick={() => setLocal(DEFAULT_SETTINGS)}
             style={{
               padding: "8px 14px",
               borderRadius: "var(--radius-md)",
@@ -709,8 +705,9 @@ function SettingsModal({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function FingerprintPage() {
-  const [logs, setLogs] = useState<Log[]>([]);
+  const [logs, setLogs] = useState<ProcessedLog[]>([]);
   const [csv, setCsv] = useState("");
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [showType, setShowType] = useState(true);
   const [showNotes, setShowNotes] = useState(false);
@@ -721,7 +718,6 @@ export default function FingerprintPage() {
     useState<FingerprintSettings>(DEFAULT_SETTINGS);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Load settings on mount
   useEffect(() => {
     fetch("/api/fingerprint/settings")
       .then((r) => r.json())
@@ -736,6 +732,7 @@ export default function FingerprintPage() {
     setLoading(true);
     setLogs([]);
     setCsv("");
+    setStats(null);
 
     try {
       const formData = new FormData();
@@ -746,11 +743,14 @@ export default function FingerprintPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
-      if (!data.logs?.length) throw new Error("No valid records found");
       setLogs(data.logs);
       setCsv(data.csv);
+      setStats(data.stats);
       toast.success(
-        `Processed ${data.logs.length} records from ${new Set(data.logs.map((l: Log) => l.empId)).size} employees`,
+        `Processed ${data.stats.rawCount} raw scans → ${data.logs.length} records` +
+          (data.stats.middleCount > 0
+            ? ` · ${data.stats.middleCount} middle punches shown`
+            : ""),
       );
     } catch (e: any) {
       toast.error(e.message);
@@ -761,7 +761,7 @@ export default function FingerprintPage() {
     }
   }
 
-  function handleDownloadCSV() {
+  function handleDownload() {
     if (!csv) return;
     let out = csv;
     if (!showType) {
@@ -784,37 +784,26 @@ export default function FingerprintPage() {
     (l) =>
       !search ||
       l.empId.toLowerCase().includes(search.toLowerCase()) ||
-      l.date.includes(search),
+      l.date.includes(search) ||
+      l.shift.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const inCount = logs.filter((l) => l.type === "IN").length;
-  const outCount = logs.filter((l) => l.type === "OUT").length;
-  const breakCount = logs.filter((l) => l.type.startsWith("BREAK")).length;
   const uniqueEmps = new Set(logs.map((l) => l.empId)).size;
   const uniqueDates = new Set(logs.map((l) => l.date)).size;
-  const withNotes = logs.filter((l) => l.note).length;
 
   function TypeBadge({ type }: { type: LogType }) {
-    const map: Record<LogType, { bg: string; color: string; label: string }> = {
+    const map: Record<LogType, { bg: string; color: string }> = {
       IN: {
         bg: "var(--status-approved-bg)",
         color: "var(--status-approved-text)",
-        label: "IN",
       },
       OUT: {
         bg: "var(--status-rejected-bg)",
         color: "var(--status-rejected-text)",
-        label: "OUT",
       },
-      BREAK_OUT: {
+      MIDDLE: {
         bg: "var(--status-pending-bg)",
         color: "var(--status-pending-text)",
-        label: "BREAK OUT",
-      },
-      BREAK_IN: {
-        bg: "var(--brand-50)",
-        color: "var(--brand-600)",
-        label: "BREAK IN",
       },
     };
     const s = map[type];
@@ -823,23 +812,59 @@ export default function FingerprintPage() {
         style={{
           fontSize: 10.5,
           fontWeight: 700,
-          padding: "2px 7px",
+          padding: "2px 8px",
           borderRadius: 99,
           background: s.bg,
           color: s.color,
-          whiteSpace: "nowrap",
         }}
       >
-        {s.label}
+        {type}
       </span>
     );
   }
+
+  function ShiftBadge({ shift }: { shift: string }) {
+    const isS1 = shift === "Shift 1";
+    const isS2 = shift === "Shift 2";
+    return (
+      <span
+        style={{
+          fontSize: 10.5,
+          fontWeight: 600,
+          padding: "2px 8px",
+          borderRadius: 99,
+          background: isS1
+            ? "var(--brand-50)"
+            : isS2
+              ? "var(--status-pending-bg)"
+              : "var(--bg-muted)",
+          color: isS1
+            ? "var(--brand-600)"
+            : isS2
+              ? "var(--status-pending-text)"
+              : "var(--text-muted)",
+        }}
+      >
+        {shift}
+      </span>
+    );
+  }
+
+  const cols = [
+    "90px",
+    "120px",
+    "130px",
+    "100px",
+    ...(showType ? ["80px"] : []),
+    ...(showType ? ["100px"] : []),
+    ...(showNotes ? ["1fr"] : []),
+  ].join(" ");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <AdminPageHeader
         title="Fingerprint Logs"
-        sub="Upload raw TXT logs from fingerprint machines and export clean CSV"
+        sub="Upload raw TXT logs from fingerprint machines — smart IN/OUT detection"
         icon={ScanLine}
         action={
           <div style={{ display: "flex", gap: 8 }}>
@@ -885,22 +910,7 @@ export default function FingerprintPage() {
                     cursor: "pointer",
                   }}
                 >
-                  <HelpCircle size={13} />
-                  {showNotes ? "Hide" : "Show"} Notes
-                  {withNotes > 0 && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: "1px 5px",
-                        borderRadius: 99,
-                        background: "var(--brand-100)",
-                        color: "var(--brand-600)",
-                      }}
-                    >
-                      {withNotes}
-                    </span>
-                  )}
+                  <HelpCircle size={13} /> {showNotes ? "Hide" : "Show"} Notes
                 </button>
                 <button
                   onClick={() => setShowType((v) => !v)}
@@ -923,7 +933,7 @@ export default function FingerprintPage() {
                   {showType ? "Hide Type" : "Show Type"}
                 </button>
                 <button
-                  onClick={handleDownloadCSV}
+                  onClick={handleDownload}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -947,7 +957,7 @@ export default function FingerprintPage() {
         }
       />
 
-      {/* Upload card */}
+      {/* Upload */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -966,7 +976,6 @@ export default function FingerprintPage() {
           onChange={handleFileUpload}
           style={{ display: "none" }}
         />
-
         {!fileName ? (
           <button
             onClick={() => fileRef.current?.click()}
@@ -1056,8 +1065,8 @@ export default function FingerprintPage() {
                   {fileName}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-                  {logs.length} records · {uniqueEmps} employees · {uniqueDates}{" "}
-                  dates
+                  {stats?.rawCount} raw scans · {logs.length} processed records
+                  · {uniqueEmps} employees · {uniqueDates} dates
                 </div>
               </div>
             </div>
@@ -1082,6 +1091,7 @@ export default function FingerprintPage() {
                   setLogs([]);
                   setCsv("");
                   setFileName("");
+                  setStats(null);
                   setSearch("");
                 }}
                 style={{
@@ -1128,14 +1138,14 @@ export default function FingerprintPage() {
               className="animate-spin"
             />
             <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              Processing logs...
+              Processing with smart algorithm...
             </span>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Stats */}
-      {logs.length > 0 && !loading && (
+      {stats && !loading && (
         <div
           style={{
             display: "grid",
@@ -1145,37 +1155,33 @@ export default function FingerprintPage() {
         >
           {[
             {
-              label: "Total Records",
-              value: logs.length,
-              color: "var(--brand-500)",
+              label: "Raw Scans",
+              value: stats.rawCount,
+              color: "var(--text-secondary)",
             },
             {
               label: "IN Punches",
-              value: inCount,
+              value: stats.inCount,
               color: "var(--status-approved-text)",
             },
             {
               label: "OUT Punches",
-              value: outCount,
+              value: stats.outCount,
               color: "var(--status-rejected-text)",
             },
-            ...(breakCount > 0
-              ? [
-                  {
-                    label: "Break Scans",
-                    value: breakCount,
-                    color: "var(--status-pending-text)",
-                  },
-                ]
-              : []),
             {
-              label: "Employees",
-              value: uniqueEmps,
-              color: "var(--brand-600)",
+              label: "Middle Punches",
+              value: stats.middleCount,
+              color: "var(--status-pending-text)",
             },
             {
-              label: "Dates",
-              value: uniqueDates,
+              label: "Shift 1",
+              value: stats.shift1Count,
+              color: "var(--brand-500)",
+            },
+            {
+              label: "Shift 2",
+              value: stats.shift2Count,
               color: "var(--status-pending-text)",
             },
           ].map(({ label, value, color }, i) => (
@@ -1230,7 +1236,7 @@ export default function FingerprintPage() {
             boxShadow: "var(--shadow-card)",
           }}
         >
-          {/* Table toolbar */}
+          {/* Toolbar */}
           <div
             style={{
               display: "flex",
@@ -1267,12 +1273,12 @@ export default function FingerprintPage() {
               </span>
             </div>
             <input
-              placeholder="Search by Emp ID or date..."
+              placeholder="Search by Emp ID, date or shift..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
                 padding: "5px 10px",
-                width: 220,
+                width: 240,
                 border: "1px solid var(--border-base)",
                 borderRadius: "var(--radius-md)",
                 fontSize: 12.5,
@@ -1287,14 +1293,7 @@ export default function FingerprintPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: [
-                "90px",
-                "110px",
-                "130px",
-                "100px",
-                ...(showType ? ["110px"] : []),
-                ...(showNotes ? ["1fr"] : []),
-              ].join(" "),
+              gridTemplateColumns: cols,
               padding: "9px 16px",
               borderBottom: "1px solid var(--border-base)",
               background: "var(--bg-muted)",
@@ -1303,10 +1302,10 @@ export default function FingerprintPage() {
           >
             {[
               "Emp ID",
-              "Shift",
               "Date",
               "Time",
-              ...(showType ? ["Type"] : []),
+              "Logical Date",
+              ...(showType ? ["Type", "Shift"] : []),
               ...(showNotes ? ["System Note"] : []),
             ].map((h) => (
               <div
@@ -1335,7 +1334,7 @@ export default function FingerprintPage() {
                   fontSize: 13,
                 }}
               >
-                No records match your search
+                No records match
               </div>
             ) : (
               filtered.map((log, i) => (
@@ -1343,14 +1342,7 @@ export default function FingerprintPage() {
                   key={i}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: [
-                      "90px",
-                      "110px",
-                      "130px",
-                      "100px",
-                      ...(showType ? ["110px"] : []),
-                      ...(showNotes ? ["1fr"] : []),
-                    ].join(" "),
+                    gridTemplateColumns: cols,
                     padding: "9px 16px",
                     borderBottom:
                       i < filtered.length - 1
@@ -1359,7 +1351,6 @@ export default function FingerprintPage() {
                     alignItems: "center",
                     gap: 12,
                     transition: "background 0.1s",
-                    background: log.note ? "var(--brand-50)" : "transparent",
                   }}
                   onMouseEnter={(e) =>
                     ((e.currentTarget as HTMLElement).style.background =
@@ -1367,7 +1358,7 @@ export default function FingerprintPage() {
                   }
                   onMouseLeave={(e) =>
                     ((e.currentTarget as HTMLElement).style.background =
-                      log.note ? "var(--brand-50)" : "transparent")
+                      "transparent")
                   }
                 >
                   <div
@@ -1385,9 +1376,6 @@ export default function FingerprintPage() {
                   >
                     {log.empId}
                   </div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-                    Shift {log.shiftIndex + 1}
-                  </div>
                   <div
                     style={{ fontSize: 12.5, color: "var(--text-secondary)" }}
                   >
@@ -1402,16 +1390,20 @@ export default function FingerprintPage() {
                   >
                     {log.time}
                   </div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                    {log.date}
+                  </div>
                   {showType && <TypeBadge type={log.type} />}
+                  {showType && <ShiftBadge shift={log.shift} />}
                   {showNotes && (
                     <div
                       style={{
                         fontSize: 11,
-                        color: "var(--brand-600)",
-                        fontStyle: log.note ? "normal" : "italic",
+                        color: "var(--text-muted)",
+                        fontStyle: "italic",
                       }}
                     >
-                      {log.note ?? "—"}
+                      {log.note}
                     </div>
                   )}
                 </div>
@@ -1421,7 +1413,6 @@ export default function FingerprintPage() {
         </motion.div>
       )}
 
-      {/* Settings modal */}
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

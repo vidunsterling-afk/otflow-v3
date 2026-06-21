@@ -10,21 +10,40 @@ const SETTINGS_DIR = path.join(process.cwd(), "public", "uploads");
 const SETTINGS_PATH = path.join(SETTINGS_DIR, "fingerprint-settings.json");
 
 export interface FingerprintSettings {
-  shiftGapHours: number;
-  breakMaxMinutes: number;
-  enableBreakTracking: boolean;
-  nightShiftMode: boolean;
-  firstPunchIsIn: boolean;
-  minShiftMinutes: number;
+  // Night OUT window: punches in this hour range = OUT from previous shift
+  nightOutStartHour: number; // default 0  (midnight)
+  nightOutEndHour: number; // default 5  (up to 05:59)
+
+  // Morning IN window: punches in this hour range = IN for day shift
+  morningInStartHour: number; // default 6
+  morningInEndHour: number; // default 11 (up to 11:59)
+
+  // Evening OUT window: punches in this hour range = OUT from day shift
+  eveningOutStartHour: number; // default 13
+  eveningOutEndHour: number; // default 23
+
+  // Middle punches (between IN and OUT on same day)
+  middlePunchMode: "ignore" | "label"; // ignore = skip, label = MIDDLE
+
+  // Shift detection from IN time
+  shift1StartHour: number; // default 6  (Shift 1 starts ~6:30)
+  shift1EndHour: number; // default 7  (if IN before 8:00 = Shift 1)
+  shift2StartHour: number; // default 8  (Shift 2 starts ~8:30)
+  shift2EndHour: number; // default 10 (if IN between 8–10 = Shift 2)
 }
 
 export const DEFAULT_SETTINGS: FingerprintSettings = {
-  shiftGapHours: 5,
-  breakMaxMinutes: 60,
-  enableBreakTracking: false,
-  nightShiftMode: false,
-  firstPunchIsIn: true,
-  minShiftMinutes: 1,
+  nightOutStartHour: 0,
+  nightOutEndHour: 5,
+  morningInStartHour: 6,
+  morningInEndHour: 11,
+  eveningOutStartHour: 13,
+  eveningOutEndHour: 23,
+  middlePunchMode: "ignore",
+  shift1StartHour: 5,
+  shift1EndHour: 7,
+  shift2StartHour: 8,
+  shift2EndHour: 11,
 };
 
 export async function GET() {

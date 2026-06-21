@@ -10,16 +10,16 @@ import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 
-export type LogType = "IN" | "OUT" | "BREAK_OUT" | "BREAK_IN";
+export type LogType = "IN" | "OUT" | "MIDDLE";
 
-export interface Log {
+export interface ProcessedLog {
   empId: string;
-  date: string;
+  date: string; // the logical date (night OUT mapped to previous day)
   time: string;
-  datetime: Date;
+  hour: number;
   type: LogType;
-  shiftIndex: number;
-  note?: string;
+  shift: string; // "Shift 1", "Shift 2", "Unknown", "N/A"
+  note: string;
 }
 
 async function loadSettings(): Promise<FingerprintSettings> {
@@ -38,17 +38,20 @@ async function loadSettings(): Promise<FingerprintSettings> {
   }
 }
 
-function parseRawFile(buffer: string) {
+interface RawPunch {
+  empId: string;
+  datetime: Date;
+  rawDate: string; // actual calendar date from file
+  time: string;
+  hour: number;
+}
+
+function parseFile(buffer: string): RawPunch[] {
   const lines = buffer
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
-  const results: {
-    empId: string;
-    date: string;
-    time: string;
-    datetime: Date;
-  }[] = [];
+  const results: RawPunch[] = [];
 
   for (const line of lines) {
     const cols = line.split("\t");
@@ -60,162 +63,162 @@ function parseRawFile(buffer: string) {
     if (!datePart || !timePart) continue;
     const datetime = new Date(`${datePart}T${timePart}`);
     if (isNaN(datetime.getTime())) continue;
-    results.push({ empId, date: datePart, time: timePart, datetime });
+    const hour = parseInt(timePart.split(":")[0]);
+    results.push({ empId, datetime, rawDate: datePart, time: timePart, hour });
   }
   return results;
 }
 
-// ── The smart algorithm ───────────────────────────────────────────────────────
-function processWithSettings(
-  rawLogs: { empId: string; date: string; time: string; datetime: Date }[],
-  settings: FingerprintSettings,
-): Log[] {
-  const {
-    shiftGapHours,
-    breakMaxMinutes,
-    enableBreakTracking,
-    nightShiftMode,
-    firstPunchIsIn,
-    minShiftMinutes,
-  } = settings;
+function detectShift(hour: number, s: FingerprintSettings): string {
+  if (hour >= s.shift1StartHour && hour <= s.shift1EndHour) return "Shift 1";
+  if (hour >= s.shift2StartHour && hour <= s.shift2EndHour) return "Shift 2";
+  return "Unknown";
+}
 
-  const shiftGapMs = shiftGapHours * 60 * 60 * 1000;
-  const breakMaxMs = breakMaxMinutes * 60 * 1000;
-  const minShiftMs = minShiftMinutes * 60 * 1000;
+function classifyPunch(
+  hour: number,
+  s: FingerprintSettings,
+): "night_out" | "morning_in" | "evening_out" | "middle" {
+  if (hour >= s.nightOutStartHour && hour <= s.nightOutEndHour)
+    return "night_out";
+  if (hour >= s.morningInStartHour && hour <= s.morningInEndHour)
+    return "morning_in";
+  if (hour >= s.eveningOutStartHour && hour <= s.eveningOutEndHour)
+    return "evening_out";
+  return "middle";
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function processWithSettings(
+  raw: RawPunch[],
+  s: FingerprintSettings,
+): ProcessedLog[] {
+  const results: ProcessedLog[] = [];
 
   // Group by employee
-  const byEmployee = new Map<string, typeof rawLogs>();
-  for (const log of rawLogs) {
-    if (!byEmployee.has(log.empId)) byEmployee.set(log.empId, []);
-    byEmployee.get(log.empId)!.push(log);
+  const byEmp = new Map<string, RawPunch[]>();
+  for (const p of raw) {
+    if (!byEmp.has(p.empId)) byEmp.set(p.empId, []);
+    byEmp.get(p.empId)!.push(p);
   }
 
-  const result: Log[] = [];
-
-  for (const [empId, punches] of byEmployee) {
-    // Sort by time
+  for (const [empId, punches] of byEmp) {
+    // Sort chronologically
     punches.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
 
-    // Night shift mode: shift punches between 00:00–05:59 to "previous day"
-    // by using a shifted date key (subtract 6 hours for grouping purposes)
-    const getDateKey = (dt: Date): string => {
-      if (!nightShiftMode) return dt.toISOString().split("T")[0];
-      const shifted = new Date(dt.getTime() - 6 * 60 * 60 * 1000);
-      return shifted.toISOString().split("T")[0];
-    };
+    // Map each punch to a logical date and classification
+    // Night OUT punches (00:00–05:59) belong to the PREVIOUS calendar day
+    const mapped = punches.map((p) => {
+      const classification = classifyPunch(p.hour, s);
+      const logicalDate =
+        classification === "night_out"
+          ? addDays(p.rawDate, -1) // midnight OUT → previous day
+          : p.rawDate;
 
-    // Group by shifted date
-    const byDate = new Map<string, typeof punches>();
-    for (const punch of punches) {
-      const key = getDateKey(punch.datetime);
-      if (!byDate.has(key)) byDate.set(key, []);
-      byDate.get(key)!.push(punch);
+      return { ...p, classification, logicalDate };
+    });
+
+    // Group by logical date
+    const byDate = new Map<string, typeof mapped>();
+    for (const p of mapped) {
+      if (!byDate.has(p.logicalDate)) byDate.set(p.logicalDate, []);
+      byDate.get(p.logicalDate)!.push(p);
     }
 
-    // Process each day's punches
-    for (const [, dayPunches] of byDate) {
+    // Process each logical day
+    for (const [logicalDate, dayPunches] of byDate) {
+      // Sort by actual time within day
       dayPunches.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
 
-      // Filter noise: remove punches too close to the previous one
-      const filtered: typeof dayPunches = [];
-      for (let i = 0; i < dayPunches.length; i++) {
-        if (i === 0) {
-          filtered.push(dayPunches[i]);
-          continue;
-        }
-        const gap =
-          dayPunches[i].datetime.getTime() -
-          dayPunches[i - 1].datetime.getTime();
-        if (gap >= minShiftMs) {
-          filtered.push(dayPunches[i]);
-        }
-        // else: too close together, likely a double-tap, skip
+      // Find the IN punch (morning) and OUT punch (evening or night)
+      const inPunch = dayPunches.find((p) => p.classification === "morning_in");
+      const outPunch = dayPunches.find(
+        (p) =>
+          p.classification === "evening_out" ||
+          p.classification === "night_out",
+      );
+      const middlePunches = dayPunches.filter(
+        (p) => p.classification === "middle",
+      );
+
+      // Determine shift from IN punch time
+      const shiftLabel = inPunch ? detectShift(inPunch.hour, s) : "Unknown";
+
+      // Add IN punch
+      if (inPunch) {
+        results.push({
+          empId,
+          date: logicalDate,
+          time: inPunch.time,
+          hour: inPunch.hour,
+          type: "IN",
+          shift: shiftLabel,
+          note: `Day shift start — ${shiftLabel}`,
+        });
       }
 
-      if (filtered.length === 0) continue;
+      // Always include middle punches in output — mode only controls the label
+      for (const mp of middlePunches) {
+        results.push({
+          empId,
+          date: logicalDate,
+          time: mp.time,
+          hour: mp.hour,
+          type: "MIDDLE",
+          shift: shiftLabel,
+          note:
+            s.middlePunchMode === "ignore"
+              ? "Mid-shift punch — displayed but not counted"
+              : "Mid-shift punch (lunch/errand)",
+        });
+      }
+      // if middlePunchMode === "ignore" we just skip them
 
-      let shiftIndex = 0;
+      // Add OUT punch
+      if (outPunch) {
+        results.push({
+          empId,
+          date: logicalDate,
+          time: outPunch.time,
+          hour: outPunch.hour,
+          type: "OUT",
+          shift: shiftLabel,
+          note:
+            outPunch.classification === "night_out"
+              ? "Night shift end (mapped to previous day)"
+              : "Day shift end",
+        });
+      }
 
-      for (let i = 0; i < filtered.length; i++) {
-        const punch = filtered[i];
-        const prev = filtered[i - 1];
-        const next = filtered[i + 1];
-
-        const gapFromPrev = prev
-          ? punch.datetime.getTime() - prev.datetime.getTime()
-          : null;
-        const gapToNext = next
-          ? next.datetime.getTime() - punch.datetime.getTime()
-          : null;
-
-        let type: LogType;
-        let note: string | undefined;
-
-        if (i === 0) {
-          // First punch of this day group
-          type = firstPunchIsIn ? "IN" : "OUT";
-          note = firstPunchIsIn
-            ? "First punch of day — assumed IN"
-            : "First punch of day — assumed OUT";
-        } else if (gapFromPrev !== null && gapFromPrev >= shiftGapMs) {
-          // Large gap from previous punch = new shift starting
-          // Previous punch was already marked, this one starts a new shift
-          shiftIndex++;
-          type = "IN";
-          note = `New shift detected (gap: ${Math.round(gapFromPrev / 3600000)}h)`;
-        } else if (
-          enableBreakTracking &&
-          gapFromPrev !== null &&
-          gapFromPrev <= breakMaxMs
-        ) {
-          // Small gap = break
-          // The previous punch was BREAK_OUT, this one is BREAK_IN
-          // Fix the previous entry's type
-          const prevEntry = result[result.length - 1];
-          if (
-            prevEntry &&
-            prevEntry.empId === empId &&
-            prevEntry.type === "IN"
-          ) {
-            prevEntry.type = "BREAK_OUT";
-            prevEntry.note = `Break detected (gap: ${Math.round(gapFromPrev / 60000)}min)`;
-          }
-          type = "BREAK_IN";
-          note = `Break end (${Math.round(gapFromPrev / 60000)}min break)`;
-        } else {
-          // Normal alternation within a shift
-          const lastEntry = result.findLast(
-            (r) => r.empId === empId && r.shiftIndex === shiftIndex,
-          );
-          if (!lastEntry) {
-            type = firstPunchIsIn ? "IN" : "OUT";
-          } else if (lastEntry.type === "IN" || lastEntry.type === "BREAK_IN") {
-            type = "OUT";
-          } else {
-            type = "IN";
-          }
-        }
-
-        result.push({
-          empId: punch.empId,
-          date: punch.date,
-          time: punch.time,
-          datetime: punch.datetime,
-          type,
-          shiftIndex,
-          note,
+      // Edge case: only one punch for the day and no clear IN/OUT
+      if (!inPunch && !outPunch && dayPunches.length > 0) {
+        const p = dayPunches[0];
+        results.push({
+          empId,
+          date: logicalDate,
+          time: p.time,
+          hour: p.hour,
+          type: "IN",
+          shift: "Unknown",
+          note: "Only punch of day — assumed IN",
         });
       }
     }
   }
 
-  // Final sort: by empId then datetime
-  result.sort((a, b) => {
+  // Final sort: empId then date then time
+  results.sort((a, b) => {
     if (a.empId !== b.empId) return a.empId.localeCompare(b.empId);
-    return a.datetime.getTime() - b.datetime.getTime();
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.time.localeCompare(b.time);
   });
 
-  return result;
+  return results;
 }
 
 export async function POST(req: NextRequest) {
@@ -230,24 +233,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
 
     const buffer = await file.text();
-    const rawLogs = parseRawFile(buffer);
-    if (rawLogs.length === 0)
+    const raw = parseFile(buffer);
+    if (raw.length === 0)
       return NextResponse.json(
-        { error: "No valid records found in file" },
+        { error: "No valid records found" },
         { status: 400 },
       );
 
     const settings = await loadSettings();
-    const logs = processWithSettings(rawLogs, settings);
+    const logs = processWithSettings(raw, settings);
 
-    const csvLines = [
-      "EmpID,Date,Time,Type,Shift",
+    const csv = [
+      "EmpID,Date,Time,Type,Shift,Note",
       ...logs.map(
-        (l) => `${l.empId},${l.date},${l.time},${l.type},${l.shiftIndex + 1}`,
+        (l) =>
+          `${l.empId},${l.date},${l.time},${l.type},${l.shift},"${l.note}"`,
       ),
-    ];
+    ].join("\n");
 
-    return NextResponse.json({ logs, csv: csvLines.join("\n"), settings });
+    // Stats for feedback
+    const inCount = logs.filter((l) => l.type === "IN").length;
+    const outCount = logs.filter((l) => l.type === "OUT").length;
+    const middleCount = logs.filter((l) => l.type === "MIDDLE").length;
+    const shift1Count = logs.filter((l) => l.shift === "Shift 1").length;
+    const shift2Count = logs.filter((l) => l.shift === "Shift 2").length;
+
+    return NextResponse.json({
+      logs,
+      csv,
+      settings,
+      stats: {
+        total: logs.length,
+        inCount,
+        outCount,
+        middleCount,
+        shift1Count,
+        shift2Count,
+        rawCount: raw.length,
+      },
+    });
   } catch (err) {
     console.error(err);
     return NextResponse.json(
