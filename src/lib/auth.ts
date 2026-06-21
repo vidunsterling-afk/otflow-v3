@@ -1,9 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+
+class InvalidCredentialsError extends CredentialsSignin {
+  code = "invalid_credentials";
+}
+
+class AccountDisabledError extends CredentialsSignin {
+  code = "account_disabled";
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt", maxAge: 20 * 60 },
@@ -16,20 +24,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) return null;
+        if (!credentials?.username || !credentials?.password) {
+          throw new InvalidCredentialsError();
+        }
 
         const user = await prisma.user.findUnique({
           where: { username: credentials.username as string },
           include: { role: true },
         });
 
-        if (!user || !user.isActive) return null;
+        if (!user) throw new InvalidCredentialsError();
+        if (!user.isActive) throw new AccountDisabledError();
 
         const valid = await bcrypt.compare(
           credentials.password as string,
           user.passwordHash,
         );
-        if (!valid) return null;
+        if (!valid) throw new InvalidCredentialsError();
 
         return {
           id: user.id,

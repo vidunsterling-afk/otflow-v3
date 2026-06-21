@@ -40,19 +40,33 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    const res = await signIn("credentials", {
-      username,
-      password,
-      redirect: false,
-    });
+    try {
+      const res = await signIn("credentials", {
+        username,
+        password,
+        redirect: false,
+      });
 
-    setLoading(false);
-
-    if (res?.ok) {
-      toast.success("Login successful.");
-      router.push("/dashboard");
-    } else {
-      toast.error("Invalid username or password.");
+      if (res?.error) {
+        console.error("Login error:", res.error);
+        if (res.error === "account_disabled") {
+          toast.error(
+            "Account rejected (disabled). Contact your administrator.",
+          );
+        } else {
+          toast.error("Invalid username or password.");
+        }
+      } else if (res?.ok) {
+        toast.success("Login successful.");
+        router.push("/dashboard");
+      } else {
+        toast.error("Something went wrong. Please try again.");
+      }
+    } catch (err) {
+      console.error("Sign in error:", err);
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
