@@ -7,15 +7,16 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  username     String   @unique
-  passwordHash String
-  canApprove   Boolean  @default(false)
-  isActive     Boolean  @default(true)
-  activeStatus String   @default("offline")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  username            String   @unique
+  passwordHash        String
+  canApprove          Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  mustChangePassword  Boolean @default(false)
+  activeStatus        String   @default("offline")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   roleId String
   role   Role   @relation(fields: [roleId], references: [id])
