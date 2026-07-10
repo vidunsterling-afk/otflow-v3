@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -11,6 +12,13 @@ export default async function AppLayout({
   const session = await auth();
   if (!session) redirect("/login");
 
+  const user = session.user as any;
+
+  // Force password change before accessing anything
+  if (user?.mustChangePassword) {
+    redirect("/change-password");
+  }
+
   return (
     <div
       style={{
@@ -19,7 +27,7 @@ export default async function AppLayout({
         background: "var(--bg-base)",
       }}
     >
-      <Sidebar permissions={(session.user as any).permissions ?? []} />
+      <Sidebar permissions={user.permissions ?? []} />
       <div
         style={{
           marginLeft: "var(--sidebar-w)",
@@ -29,7 +37,7 @@ export default async function AppLayout({
           minWidth: 0,
         }}
       >
-        <Topbar user={session.user as any} />
+        <Topbar user={user} />
         <main style={{ flex: 1, padding: "24px", overflowY: "auto" }}>
           {children}
         </main>

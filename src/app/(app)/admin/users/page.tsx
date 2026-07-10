@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useState } from "react";
@@ -9,6 +11,7 @@ import {
   Trash2,
   ShieldCheck,
   ShieldOff,
+  KeyRound,
 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminTable } from "@/components/admin/AdminTable";
@@ -161,6 +164,29 @@ export default function UsersPage() {
       toast.success(`User ${u.isActive ? "deactivated" : "activated"}`);
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     } else toast.error("Failed");
+  }
+
+  async function handleResetPassword(u: User) {
+    const newPass = prompt(`Enter temporary password for "${u.username}":`);
+    if (!newPass) return;
+    if (newPass.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+
+    const res = await fetch(`/api/admin/users/${u.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: newPass }),
+    });
+
+    if (res.ok) {
+      toast.success(
+        `Password reset for ${u.username} — they will be forced to change it on next login`,
+      );
+    } else {
+      toast.error("Failed to reset password");
+    }
   }
 
   async function handleDelete(u: User) {
@@ -333,6 +359,33 @@ export default function UsersPage() {
                 >
                   <Pencil size={13} />
                 </button>
+                <button
+                  onClick={() => handleResetPassword(u)}
+                  title="Reset password"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "var(--radius-sm)",
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    color: "var(--status-pending-text)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "background 0.1s",
+                  }}
+                  onMouseEnter={(e) =>
+                    ((e.currentTarget as HTMLElement).style.background =
+                      "var(--status-pending-bg)")
+                  }
+                  onMouseLeave={(e) =>
+                    ((e.currentTarget as HTMLElement).style.background =
+                      "transparent")
+                  }
+                >
+                  <KeyRound size={13} />
+                </button>
                 {u.id !== selfId && (
                   <button
                     onClick={() => handleDelete(u)}
@@ -469,7 +522,7 @@ export default function UsersPage() {
                   marginBottom: 6,
                 }}
               >
-                Permissions from "{selectedRole.name}" role
+                Permissions from &quot;{selectedRole.name}&quot; role
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {selectedRole.permissions.length === 0 ? (

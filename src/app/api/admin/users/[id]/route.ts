@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -27,7 +28,10 @@ export async function PATCH(
   if (roleId) updateData.roleId = roleId;
   if (canApprove !== undefined) updateData.canApprove = canApprove;
   if (isActive !== undefined) updateData.isActive = isActive;
-  if (password) updateData.passwordHash = await bcrypt.hash(password, 12);
+  if (password) {
+    updateData.passwordHash = await bcrypt.hash(password, 12);
+    updateData.mustChangePassword = true;
+  }
 
   const updated = await prisma.user.update({
     where: { id },

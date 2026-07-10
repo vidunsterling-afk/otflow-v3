@@ -50,6 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           roleName: user.role.name,
           permissions: user.role.permissions,
           canApprove: user.canApprove,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
@@ -63,10 +64,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.roleName = (user as any).roleName;
         token.permissions = (user as any).permissions;
         token.canApprove = (user as any).canApprove;
+        token.mustChangePassword = (user as any).mustChangePassword;
       }
-      // When update() is called from client, refresh the token expiry
       if (trigger === "update") {
         token.iat = Math.floor(Date.now() / 1000);
+        // Re-fetch mustChangePassword from DB on session update
+        if (token.id) {
+          const fresh = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { mustChangePassword: true },
+          });
+          if (fresh) token.mustChangePassword = fresh.mustChangePassword;
+        }
       }
       return token;
     },
@@ -77,6 +86,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       (session.user as any).roleName = token.roleName;
       (session.user as any).permissions = token.permissions;
       (session.user as any).canApprove = token.canApprove;
+      (session.user as any).mustChangePassword = token.mustChangePassword;
       return session;
     },
   },

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -49,7 +50,14 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
-    data: { email, username, passwordHash, roleId, canApprove: !!canApprove },
+    data: {
+      email,
+      username,
+      passwordHash,
+      roleId,
+      canApprove: !!canApprove,
+      mustChangePassword: true,
+    },
     include: { role: { select: { id: true, name: true, permissions: true } } },
   });
 
