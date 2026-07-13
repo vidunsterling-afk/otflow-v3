@@ -1,40 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, Eye, EyeOff, Loader2 } from "lucide-react";
-import { Database } from "@deemlol/next-icons";
+import { Clock, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // DB Status
-  const [dbStatus, setDbStatus] = useState<"loading" | "ok" | "error">(
-    "loading",
-  );
-
-  useEffect(() => {
-    async function checkDB() {
-      try {
-        const res = await fetch("/api/health/db");
-        const data = await res.json();
-        if (data.status === "ok") setDbStatus("ok");
-        else setDbStatus("error");
-      } catch (err) {
-        console.error("DB ERROR:", err);
-        setDbStatus("error");
-      }
-    }
-
-    checkDB();
-  }, []);
+  const searchParams = useSearchParams();
+  const passwordChanged = searchParams.get("passwordChanged") === "true";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -81,34 +62,6 @@ export default function LoginPage() {
         padding: 24,
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          top: 16,
-          right: 16,
-          fontSize: 11,
-          padding: "4px 8px",
-          borderRadius: 999,
-          background:
-            dbStatus === "ok"
-              ? "rgba(34, 197, 94, 0.15)"
-              : dbStatus === "error"
-                ? "rgba(239, 68, 68, 0.15)"
-                : "rgba(148, 163, 184, 0.15)",
-          color:
-            dbStatus === "ok"
-              ? "#22c55e"
-              : dbStatus === "error"
-                ? "#ef4444"
-                : "#94a3b8",
-          border: "1px solid currentColor",
-        }}
-      >
-        <Database size={16} />: {dbStatus.toUpperCase()}
-      </div>
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -179,6 +132,29 @@ export default function LoginPage() {
             Sign in to your account
           </div>
         </div>
+
+        {passwordChanged && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              padding: "9px 12px",
+              marginBottom: 4,
+              borderRadius: "var(--radius-md)",
+              background: "var(--status-approved-bg)",
+              border: "1px solid var(--status-approved-border)",
+              fontSize: 12.5,
+              color: "var(--status-approved-text)",
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              fontWeight: 500,
+            }}
+          >
+            <CheckCircle2 size={13} />
+            Password changed successfully — sign in with your new password
+          </motion.div>
+        )}
 
         <form
           onSubmit={handleSubmit}
@@ -303,5 +279,13 @@ export default function LoginPage() {
         </form>
       </motion.div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   );
 }

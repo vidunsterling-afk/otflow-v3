@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
-import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -128,9 +128,19 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 export default function ChangePasswordPage() {
-  const { data: session, update } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const user = session?.user as any;
+
+  // Redirect to dashboard if user doesn't need to change password
+  useEffect(() => {
+    if (session && !(session.user as any)?.mustChangePassword) {
+      router.replace("/dashboard");
+    }
+    if (!session && status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [session, status, router]);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -169,12 +179,11 @@ export default function ChangePasswordPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to change password");
 
-      toast.success("Password changed successfully");
+      toast.success("Password changed - please sign in with your new password");
 
-      // Refresh session so mustChangePassword clears
-      await update();
-
-      router.push("/dashboard");
+      // Sign out to force a fresh token without mustChangePassword flag
+      await signOut({ redirect: false });
+      router.replace("/login?passwordChanged=true");
     } catch (e: any) {
       setError(e.message);
     } finally {

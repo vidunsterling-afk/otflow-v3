@@ -14,11 +14,6 @@ export default async function AppLayout({
 
   const user = session.user as any;
 
-  // Force password change before accessing anything
-  if (user?.mustChangePassword) {
-    redirect("/change-password");
-  }
-
   return (
     <div
       style={{
