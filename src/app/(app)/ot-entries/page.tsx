@@ -1024,6 +1024,7 @@ export default function OtEntriesPage() {
         onClose={() => setAddOpen(false)}
         onSuccess={refresh}
         defaultDate={selectedDate ?? undefined}
+        closeOnBackdropClick={false}
       />
       <ApproveModal
         open={!!approveEntry}

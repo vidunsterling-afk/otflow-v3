@@ -683,6 +683,7 @@ interface Props {
   onClose: () => void;
   onSuccess: () => void;
   defaultDate?: string;
+  closeOnBackdropClick?: boolean;
 }
 
 export function AddEntryModal({
@@ -690,6 +691,7 @@ export function AddEntryModal({
   onClose,
   onSuccess,
   defaultDate,
+  closeOnBackdropClick,
 }: Props) {
   const [state, dispatch] = useReducer(reducer, {
     workDate: defaultDate ?? "",
@@ -826,6 +828,7 @@ export function AddEntryModal({
     <Modal
       open={open}
       onClose={onClose}
+      closeOnBackdropClick={closeOnBackdropClick}
       title={`Add OT Entries${state.rows.length > 1 ? ` (${state.rows.length})` : ""}`}
       headerContent={<SessionCountdown pill alwaysShow />}
       width={580}

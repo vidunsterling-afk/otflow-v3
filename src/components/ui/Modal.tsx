@@ -12,6 +12,7 @@ interface ModalProps {
   children: React.ReactNode;
   width?: number;
   headerContent?: React.ReactNode;
+  closeOnBackdropClick?: boolean;
 }
 
 export function Modal({
@@ -22,6 +23,7 @@ export function Modal({
   children,
   width = 520,
   headerContent,
+  closeOnBackdropClick = true,
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -50,7 +52,7 @@ export function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            onClick={onClose}
+            onClick={closeOnBackdropClick ? onClose : undefined}
             style={{
               position: "absolute",
               inset: 0,
