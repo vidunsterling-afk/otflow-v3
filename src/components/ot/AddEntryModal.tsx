@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import {
@@ -23,6 +24,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { formatMinutes } from "@/lib/utils";
 import { calcOtMinutes } from "@/lib/otCalc";
+import { SessionCountdown } from "@/components/layout/SessionCountdown";
 
 const SHIFTS = ["Shift 1", "Shift 2", "NO_SHIFT"];
 
@@ -825,6 +827,7 @@ export function AddEntryModal({
       open={open}
       onClose={onClose}
       title={`Add OT Entries${state.rows.length > 1 ? ` (${state.rows.length})` : ""}`}
+      headerContent={<SessionCountdown pill alwaysShow />}
       width={580}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 
 interface ModalProps {
   open: boolean;
@@ -11,6 +11,7 @@ interface ModalProps {
   subtitle?: string;
   children: React.ReactNode;
   width?: number;
+  headerContent?: React.ReactNode;
 }
 
 export function Modal({
@@ -20,6 +21,7 @@ export function Modal({
   subtitle,
   children,
   width = 520,
+  headerContent,
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -111,33 +113,45 @@ export function Modal({
                   </div>
                 )}
               </div>
-              <button
-                onClick={onClose}
+
+              <div
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-base)",
-                  background: "transparent",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  color: "var(--text-muted)",
+                  gap: 8,
                   flexShrink: 0,
-                  transition: "background 0.12s",
                 }}
-                onMouseEnter={(e) =>
-                  ((e.currentTarget as HTMLElement).style.background =
-                    "var(--bg-muted)")
-                }
-                onMouseLeave={(e) =>
-                  ((e.currentTarget as HTMLElement).style.background =
-                    "transparent")
-                }
               >
-                <X size={13} />
-              </button>
+                {headerContent}
+
+                <button
+                  onClick={onClose}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--border-base)",
+                    background: "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: "var(--text-muted)",
+                    flexShrink: 0,
+                    transition: "background 0.12s",
+                  }}
+                  onMouseEnter={(e) =>
+                    ((e.currentTarget as HTMLElement).style.background =
+                      "var(--bg-muted)")
+                  }
+                  onMouseLeave={(e) =>
+                    ((e.currentTarget as HTMLElement).style.background =
+                      "transparent")
+                  }
+                >
+                  <X size={13} />
+                </button>
+              </div>
             </div>
 
             {/* Body */}
