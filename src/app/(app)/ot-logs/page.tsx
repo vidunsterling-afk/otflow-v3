@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -27,9 +28,10 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { LogoSettings } from "@/components/ot/LogoSettings";
 import { Building2 } from "lucide-react";
+import { format } from "date-fns";
 
 const RANGES = [
-  { value: "day", label: "Today" },
+  { value: "day", label: "Daily" },
   { value: "week", label: "This Week" },
   { value: "month", label: "This Month" },
   { value: "year", label: "This Year" },
@@ -93,6 +95,7 @@ export default function OtLogsPage() {
 
   const [range, setRange] = useState("week");
   const [customFrom, setCustomFrom] = useState("");
+  const [dailyDate, setDailyDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [customTo, setCustomTo] = useState("");
   const [status, setStatus] = useState("ALL");
   const [empSearch, setEmpSearch] = useState("");
@@ -120,6 +123,7 @@ export default function OtLogsPage() {
     page: String(page),
     pageSize: "50",
     ...(selectedEmp ? { employeeId: selectedEmp.id } : {}),
+    ...(range === "day" ? { from: dailyDate } : {}),
     ...(range === "custom" && customFrom ? { from: customFrom } : {}),
     ...(range === "custom" && customTo ? { to: customTo } : {}),
   }).toString();
@@ -161,6 +165,7 @@ export default function OtLogsPage() {
         status,
         companyName,
         ...(selectedEmp ? { employeeId: selectedEmp.id } : {}),
+        ...(range === "day" ? { from: dailyDate } : {}),
         ...(range === "custom" && customFrom ? { from: customFrom } : {}),
         ...(range === "custom" && customTo ? { to: customTo } : {}),
       }).toString();
@@ -365,6 +370,93 @@ export default function OtLogsPage() {
               </button>
             ))}
           </div>
+
+          {/* Daily date picker */}
+          {range === "day" && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{ display: "flex", alignItems: "center", gap: 10 }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    color: "var(--text-muted)",
+                    marginBottom: 4,
+                    fontWeight: 500,
+                  }}
+                >
+                  Select Date
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Input
+                    type="date"
+                    value={dailyDate}
+                    onChange={(e) => {
+                      setDailyDate(e.target.value);
+                      setPage(1);
+                    }}
+                    style={{ width: 170 }}
+                  />
+                  <button
+                    onClick={() => {
+                      setDailyDate(format(new Date(), "yyyy-MM-dd"));
+                      setPage(1);
+                    }}
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--border-base)",
+                      background: "var(--bg-card)",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: "var(--text-secondary)",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      transition: "background 0.12s",
+                    }}
+                    onMouseEnter={(e) =>
+                      ((e.currentTarget as HTMLElement).style.background =
+                        "var(--bg-muted)")
+                    }
+                    onMouseLeave={(e) =>
+                      ((e.currentTarget as HTMLElement).style.background =
+                        "var(--bg-card)")
+                    }
+                  >
+                    Today
+                  </button>
+                </div>
+              </div>
+              {dailyDate && (
+                <div
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "var(--radius-md)",
+                    background: "var(--brand-50)",
+                    border: "1px solid var(--brand-100)",
+                    fontSize: 12.5,
+                    color: "var(--brand-700)",
+                    fontWeight: 500,
+                    alignSelf: "flex-end",
+                    marginBottom: 1,
+                  }}
+                >
+                  {new Date(dailyDate + "T00:00:00Z").toLocaleDateString(
+                    "en-US",
+                    {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      timeZone: "UTC",
+                    },
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
 
           {/* Custom date range */}
           {range === "custom" && (

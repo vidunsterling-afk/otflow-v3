@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     dateFrom = from;
     dateTo = to;
   } else if (range === "day") {
-    dateFrom = dateTo = format(now, "yyyy-MM-dd");
+    dateFrom = dateTo = from ? from : format(now, "yyyy-MM-dd");
   } else if (range === "week") {
     dateFrom = format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
     dateTo = format(endOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");

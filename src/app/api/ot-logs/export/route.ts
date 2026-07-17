@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -30,7 +31,7 @@ function buildDateRange(
 ) {
   if (range === "custom" && from && to) return { dateFrom: from, dateTo: to };
   if (range === "day") {
-    const d = format(now, "yyyy-MM-dd");
+    const d = from ? from : format(now, "yyyy-MM-dd");
     return { dateFrom: d, dateTo: d };
   }
   if (range === "month")
@@ -55,10 +56,6 @@ function styleCell(ws: XLSX.WorkSheet, addr: string, style: any) {
   ws[addr].s = style;
 }
 
-const TITLE_STYLE = {
-  font: { bold: true, sz: 13, color: { rgb: "1E3A5F" } },
-  alignment: { horizontal: "center" },
-};
 const HEADER_STYLE = {
   font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
   fill: { fgColor: { rgb: "2563EB" } },
@@ -494,6 +491,160 @@ function buildRecordsSheet(
   return ws;
 }
 
+// ── SHEET: Flat daily view (used for single-date exports) ─────────────────────
+function buildDailySheet(
+  entries: any[],
+  meta: {
+    scope: string;
+    dateFrom: string;
+    dateTo: string;
+    statusFilter: string;
+    companyName: string;
+    generatedAt: string;
+  },
+) {
+  const ws: XLSX.WorkSheet = {};
+  const rows: any[][] = [];
+
+  rows.push([meta.companyName || "OTFlow"]);
+  rows.push([`DAILY OT REPORT — ${meta.dateFrom}`]);
+  rows.push([]);
+  rows.push(["Date", meta.dateFrom]);
+  rows.push(["Status Filter", meta.statusFilter]);
+  rows.push(["Generated At", meta.generatedAt]);
+  rows.push([]);
+
+  const totalNormal = entries.reduce((s, e) => s + e.normalMinutes, 0);
+  const totalDouble = entries.reduce((s, e) => s + e.doubleMinutes, 0);
+  const totalTriple = entries.reduce((s, e) => s + e.tripleMinutes, 0);
+  const totalApproved = entries.reduce((s, e) => s + e.approvedTotalMinutes, 0);
+  const pending = entries.filter((e) => e.status === "PENDING").length;
+  const approved = entries.filter((e) => e.status === "APPROVED").length;
+  const rejected = entries.filter((e) => e.status === "REJECTED").length;
+
+  rows.push(["SUMMARY"]);
+  rows.push(["Total Entries", entries.length]);
+  rows.push(["Pending", pending]);
+  rows.push(["Approved", approved]);
+  rows.push(["Rejected", rejected]);
+  rows.push(["Normal OT (hrs)", fmt(totalNormal)]);
+  rows.push(["Double OT (hrs)", fmt(totalDouble)]);
+  rows.push(["Triple OT (hrs)", fmt(totalTriple)]);
+  rows.push(["Approved OT (hrs)", fmt(totalApproved)]);
+  rows.push([]);
+
+  const tableStart = rows.length;
+
+  rows.push([
+    "Emp ID",
+    "Employee Name",
+    "Shift",
+    "In Time",
+    "Out Time",
+    "Normal (Hrs)",
+    "Double (Hrs)",
+    "Triple (Hrs)",
+    "Approved (Hrs)",
+    "Night",
+    "Manual",
+    "Status",
+    "Decision Reason",
+  ]);
+
+  const sorted = [...entries].sort((a, b) => {
+    if (a.status !== b.status) return a.status.localeCompare(b.status);
+    return a.employee.empId.localeCompare(b.employee.empId);
+  });
+
+  let alt = false;
+  for (const e of sorted) {
+    rows.push([
+      e.employee.empId,
+      e.employee.name,
+      e.shift,
+      e.inTime ?? "—",
+      e.outTime ?? "—",
+      fmt(e.normalMinutes),
+      fmt(e.doubleMinutes),
+      fmt(e.tripleMinutes),
+      fmt(e.approvedTotalMinutes),
+      e.isNight ? "●" : "",
+      e.manualOverride ? "●" : "",
+      e.status,
+      e.decisionReason ?? "",
+    ]);
+
+    const rowIdx = rows.length;
+    const style = alt ? ALT_ROW_STYLE : NORMAL_ROW_STYLE;
+    for (let c = 0; c < 13; c++) {
+      styleCell(ws, `${colLetter(c)}${rowIdx}`, style);
+    }
+    alt = !alt;
+  }
+
+  // Total row
+  rows.push([
+    "",
+    "TOTAL",
+    "",
+    "",
+    "",
+    fmt(totalNormal),
+    fmt(totalDouble),
+    fmt(totalTriple),
+    fmt(totalApproved),
+    "",
+    "",
+    "",
+    "",
+  ]);
+  const totalRowIdx = rows.length;
+  for (let c = 0; c < 13; c++) {
+    styleCell(ws, `${colLetter(c)}${totalRowIdx}`, SUMMARY_TOTAL_STYLE);
+  }
+
+  XLSX.utils.sheet_add_aoa(ws, rows, { origin: "A1" });
+
+  styleCell(ws, "A1", {
+    font: { bold: true, sz: 15, color: { rgb: "1E3A5F" } },
+  });
+  styleCell(ws, "A2", {
+    font: { bold: true, sz: 12, color: { rgb: "2563EB" } },
+  });
+  for (let i = 4; i <= 6; i++) {
+    styleCell(ws, `A${i}`, META_LABEL_STYLE);
+    styleCell(ws, `B${i}`, META_VALUE_STYLE);
+  }
+
+  // Summary section header
+  styleCell(ws, "A8", {
+    font: { bold: true, sz: 10, color: { rgb: "1E3A5F" } },
+    fill: { fgColor: { rgb: "EFF6FF" } },
+  });
+
+  // Table header row
+  const hdrRow = tableStart + 1;
+  ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M"].forEach(
+    (col) => {
+      styleCell(ws, `${col}${hdrRow}`, HEADER_STYLE);
+    },
+  );
+
+  ws["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 12 } },
+    { s: { r: 7, c: 0 }, e: { r: 7, c: 12 } },
+  ];
+
+  ws["!ref"] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: rows.length, c: 12 },
+  });
+  setColWidths(ws, [10, 24, 10, 9, 9, 13, 13, 13, 14, 6, 7, 10, 20]);
+
+  return ws;
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -545,7 +696,20 @@ export async function GET(req: NextRequest) {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, buildSummarySheet(entries, meta), "Summary");
-  XLSX.utils.book_append_sheet(wb, buildRecordsSheet(entries, meta), "Records");
+
+  if (range === "day") {
+    XLSX.utils.book_append_sheet(
+      wb,
+      buildDailySheet(entries, meta),
+      "Daily Records",
+    );
+  } else {
+    XLSX.utils.book_append_sheet(
+      wb,
+      buildRecordsSheet(entries, meta),
+      "Records",
+    );
+  }
 
   const buffer = XLSX.write(wb, {
     type: "buffer",
