@@ -6,9 +6,7 @@ import {
   DEFAULT_SETTINGS,
   type FingerprintSettings,
 } from "@/app/api/fingerprint/settings/route";
-import { readFile } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { prisma } from "@/lib/prisma";
 
 export type LogType = "IN" | "OUT" | "MIDDLE";
 
@@ -24,15 +22,11 @@ export interface ProcessedLog {
 
 async function loadSettings(): Promise<FingerprintSettings> {
   try {
-    const p = path.join(
-      process.cwd(),
-      "public",
-      "uploads",
-      "fingerprint-settings.json",
-    );
-    if (!existsSync(p)) return DEFAULT_SETTINGS;
-    const raw = await readFile(p, "utf-8");
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const row = await prisma.systemSetting.findUnique({
+      where: { key: "fingerprint_settings" },
+    });
+    if (!row) return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(row.value) };
   } catch {
     return DEFAULT_SETTINGS;
   }
