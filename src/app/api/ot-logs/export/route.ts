@@ -393,7 +393,7 @@ function buildRecordsSheet(
     let altRow = false;
 
     for (const e of empEntries) {
-      const isNight = e.isNight ? "●" : "";
+      const isNight = e.isNight ? "1" : "";
       if (e.isNight) nightCount++;
       subNormal += e.normalMinutes;
       subDouble += e.doubleMinutes;
@@ -568,7 +568,7 @@ function buildDailySheet(
       fmt(e.doubleMinutes),
       fmt(e.tripleMinutes),
       fmt(e.approvedTotalMinutes),
-      e.isNight ? "●" : "",
+      e.isNight ? "1" : "",
       e.manualOverride ? "●" : "",
       e.status,
       e.decisionReason ?? "",
