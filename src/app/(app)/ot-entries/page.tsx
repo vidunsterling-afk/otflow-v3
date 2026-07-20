@@ -1,8 +1,10 @@
+/* eslint-disable react-hooks/preserve-manual-memoization */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useCallback, useReducer } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence, number } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -37,6 +39,7 @@ import {
 import { RefreshCcw } from "@deemlol/next-icons";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
+import { Status } from "@/lib/types";
 
 interface OtEntry {
   id: string;
@@ -49,7 +52,7 @@ interface OtEntry {
   doubleMinutes: number;
   tripleMinutes: number;
   isNight: boolean;
-  status: string;
+  status: Status;
   manualOverride: boolean;
   approvedTotalMinutes: number;
   employee: { name: string; empId: string };
@@ -928,33 +931,81 @@ export default function OtEntriesPage() {
                       </div>
 
                       {/* Middle — OT breakdown */}
-                      <div style={{ display: "flex", gap: 12, flexShrink: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          flexShrink: 0,
+                          flexWrap: "wrap",
+                        }}
+                      >
                         {[
-                          { label: "Normal", value: entry.normalMinutes },
-                          { label: "Double", value: entry.doubleMinutes },
-                          { label: "Triple", value: entry.tripleMinutes },
-                        ].map(({ label, value }) =>
+                          {
+                            label: "Normal",
+                            value: entry.normalMinutes,
+                            bg: "var(--brand-50)",
+                            color: "var(--brand-600)",
+                            border: "var(--brand-200)",
+                          },
+                          {
+                            label: "Double",
+                            value: entry.doubleMinutes,
+                            bg: "rgba(245, 158, 11, 0.12)",
+                            color: "#b45309",
+                            border: "rgba(245, 158, 11, 0.25)",
+                          },
+                          {
+                            label: "Triple",
+                            value: entry.tripleMinutes,
+                            bg: "rgba(239, 68, 68, 0.12)",
+                            color: "#b91c1c",
+                            border: "rgba(239, 68, 68, 0.25)",
+                          },
+                        ].map(({ label, value, bg, color, border }) =>
                           value > 0 ? (
-                            <div key={label} style={{ textAlign: "center" }}>
-                              <div
+                            <div
+                              key={label}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "4px 10px",
+                                borderRadius: 999,
+                                background: bg,
+                                border: `1px solid ${border}`,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <span
                                 style={{
                                   fontSize: 10,
-                                  color: "var(--text-muted)",
+                                  fontWeight: 700,
+                                  color,
                                   textTransform: "uppercase",
                                   letterSpacing: "0.4px",
                                 }}
                               >
                                 {label}
-                              </div>
+                              </span>
+
                               <div
                                 style={{
-                                  fontSize: 13,
-                                  fontWeight: 600,
+                                  width: 1,
+                                  height: 12,
+                                  background: border,
+                                }}
+                              />
+
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
                                   color: "var(--text-primary)",
                                 }}
                               >
                                 {formatMinutes(value)}
-                              </div>
+                              </span>
                             </div>
                           ) : null,
                         )}
@@ -965,12 +1016,23 @@ export default function OtEntriesPage() {
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 8,
+                          gap: 10,
                           flexShrink: 0,
                         }}
                       >
-                        <StatusBadge status={entry.status} />
-                        <div style={{ display: "flex", gap: 4 }}>
+                        <StatusBadge status={entry.status} iconWithText />
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "3px",
+                            borderRadius: 999,
+                            background: "var(--bg-muted)",
+                            border: "1px solid var(--border-base)",
+                          }}
+                        >
                           {canApprove && entry.status === "PENDING" && (
                             <>
                               <ActionBtn
@@ -989,6 +1051,7 @@ export default function OtEntriesPage() {
                               />
                             </>
                           )}
+
                           {canEdit && (
                             <>
                               <ActionBtn

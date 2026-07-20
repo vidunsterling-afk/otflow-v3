@@ -1,3 +1,5 @@
+import { Status } from "./types";
+
 export interface DashboardStats {
   totalPending: number;
   totalApproved: number;
@@ -9,7 +11,7 @@ export interface DashboardStats {
   recentEntries: Array<{
     id: string;
     workDate: string;
-    status: string;
+    status: Status;
     shift: string;
     approvedTotalMinutes: number;
     normalMinutes: number;

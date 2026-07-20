@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { LogoSettings } from "@/components/ot/LogoSettings";
 import { Building2 } from "lucide-react";
 import { format } from "date-fns";
+import { Status } from "@/lib/types";
 
 const RANGES = [
   { value: "day", label: "Daily" },
@@ -63,7 +64,7 @@ interface LogEntry {
   approvedTotalMinutes: number;
   isNight: boolean;
   manualOverride: boolean;
-  status: string;
+  status: Status;
   decisionReason?: string | null;
   reason?: string | null;
   decidedAt?: string | null;
@@ -904,14 +905,14 @@ export default function OtLogsPage() {
                   style={{
                     display: "grid",
                     gridTemplateColumns:
-                      "90px 1fr 100px 120px 80px 80px 80px 100px 110px",
-                    padding: "11px 16px",
+                      "90px 1fr 100px 120px 80px 80px 80px 120px 110px",
+                    padding: "12px 16px",
                     borderBottom:
                       i < data.entries.length - 1
                         ? "1px solid var(--border-base)"
                         : "none",
                     alignItems: "center",
-                    transition: "background 0.1s",
+                    transition: "background 0.15s",
                   }}
                   onMouseEnter={(e) =>
                     ((e.currentTarget as HTMLElement).style.background =
@@ -922,20 +923,27 @@ export default function OtLogsPage() {
                       "transparent")
                   }
                 >
-                  <div
-                    style={{
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      color: "var(--brand-600)",
-                      background: "var(--brand-50)",
-                      padding: "2px 7px",
-                      borderRadius: 99,
-                      display: "inline-block",
-                      width: "fit-content",
-                    }}
-                  >
-                    {entry.employee.empId}
+                  {/* Employee ID */}
+                  <div>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        background: "var(--brand-50)",
+                        border: "1px solid var(--brand-200)",
+                        color: "var(--brand-600)",
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {entry.employee.empId}
+                    </span>
                   </div>
+
+                  {/* Employee */}
                   <div>
                     <div
                       style={{
@@ -946,45 +954,96 @@ export default function OtLogsPage() {
                     >
                       {entry.employee.name}
                     </div>
+
                     <div
                       style={{
-                        fontSize: 11,
-                        color: "var(--text-muted)",
+                        marginTop: 3,
                         display: "flex",
                         alignItems: "center",
-                        gap: 4,
+                        gap: 6,
+                        flexWrap: "wrap",
+                        fontSize: 11,
+                        color: "var(--text-muted)",
                       }}
                     >
                       {entry.inTime && (
-                        <>
+                        <span>
                           {entry.inTime} – {entry.outTime}
-                        </>
+                        </span>
                       )}
+
                       {entry.isNight && (
-                        <Moon size={9} color="var(--brand-400)" />
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 3,
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            background: "rgba(99,102,241,.10)",
+                            border: "1px solid rgba(99,102,241,.2)",
+                          }}
+                        >
+                          <Moon size={10} />
+                          Night
+                        </span>
                       )}
+
                       {entry.manualOverride && (
-                        <AlertTriangle
-                          size={9}
-                          color="var(--status-pending-text)"
-                        />
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 3,
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            background: "var(--status-pending-bg)",
+                            border: "1px solid var(--status-pending-border)",
+                            color: "var(--status-pending-text)",
+                          }}
+                        >
+                          <AlertTriangle size={10} />
+                          Manual
+                        </span>
                       )}
                     </div>
                   </div>
-                  <div
-                    style={{ fontSize: 12.5, color: "var(--text-secondary)" }}
-                  >
-                    {formatDate(entry.workDate)}
-                  </div>
-                  <div
-                    style={{ fontSize: 12.5, color: "var(--text-secondary)" }}
-                  >
-                    {entry.shift}
-                  </div>
+
+                  {/* Date */}
                   <div
                     style={{
                       fontSize: 12.5,
+                      color: "var(--text-secondary)",
                       fontWeight: 500,
+                    }}
+                  >
+                    {formatDate(entry.workDate)}
+                  </div>
+
+                  {/* Shift */}
+                  <div>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        background: "var(--bg-muted)",
+                        border: "1px solid var(--border-base)",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--text-primary)",
+                      }}
+                    >
+                      {entry.shift}
+                    </span>
+                  </div>
+
+                  {/* Normal */}
+                  <div
+                    style={{
+                      textAlign: "center",
+                      fontSize: 12.5,
+                      fontWeight: 600,
                       color: "var(--text-primary)",
                     }}
                   >
@@ -992,10 +1051,13 @@ export default function OtLogsPage() {
                       ? formatMinutes(entry.normalMinutes)
                       : "—"}
                   </div>
+
+                  {/* Double */}
                   <div
                     style={{
+                      textAlign: "center",
                       fontSize: 12.5,
-                      fontWeight: 500,
+                      fontWeight: 600,
                       color: "var(--text-primary)",
                     }}
                   >
@@ -1003,10 +1065,13 @@ export default function OtLogsPage() {
                       ? formatMinutes(entry.doubleMinutes)
                       : "—"}
                   </div>
+
+                  {/* Triple */}
                   <div
                     style={{
+                      textAlign: "center",
                       fontSize: 12.5,
-                      fontWeight: 500,
+                      fontWeight: 600,
                       color: "var(--text-primary)",
                     }}
                   >
@@ -1014,11 +1079,23 @@ export default function OtLogsPage() {
                       ? formatMinutes(entry.tripleMinutes)
                       : "—"}
                   </div>
-                  <StatusBadge status={entry.status} />
+
+                  {/* Status */}
                   <div
                     style={{
-                      fontSize: 12.5,
-                      fontWeight: 600,
+                      display: "flex",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <StatusBadge status={entry.status} iconWithText />
+                  </div>
+
+                  {/* Approved */}
+                  <div
+                    style={{
+                      textAlign: "center",
+                      fontSize: 13,
+                      fontWeight: 700,
                       color: "var(--text-primary)",
                     }}
                   >

@@ -243,21 +243,36 @@ export default function UsersPage() {
             key: "role",
             label: "Role",
             width: "120px",
-            render: (u) => (
-              <span
-                style={{
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: 99,
-                  background: "var(--brand-50)",
-                  color: "var(--brand-600)",
-                  border: "1px solid var(--brand-100)",
-                }}
-              >
-                {u.role.name}
-              </span>
-            ),
+            render: (u) => {
+              const roleName = u.role.name;
+
+              const shortRole =
+                roleName.split(" ").length > 2
+                  ? roleName
+                      .split(" ")
+                      .map((word) => word[0])
+                      .join("")
+                      .toUpperCase()
+                  : roleName;
+
+              return (
+                <span
+                  title={roleName}
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: 99,
+                    background: "var(--brand-50)",
+                    color: "var(--brand-600)",
+                    border: "1px solid var(--brand-100)",
+                    cursor: "default",
+                  }}
+                >
+                  {shortRole}
+                </span>
+              );
+            },
           },
           {
             key: "approve",

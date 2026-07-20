@@ -247,7 +247,7 @@ export default function DashboardPage() {
                         : entry.normalMinutes + entry.approvedTotalMinutes,
                     )}
                   </div>
-                  <StatusBadge status={entry.status} />
+                  <StatusBadge status={entry.status} iconOnly />
                 </div>
               </motion.div>
             ))}
