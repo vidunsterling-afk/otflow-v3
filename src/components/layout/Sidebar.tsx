@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import Link from "next/link";
@@ -16,10 +18,12 @@ import {
   ChevronDown,
   Database,
   ScanLine,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useState, useEffect } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 const NAV_ITEMS = [
   {
@@ -151,7 +155,7 @@ function DevMigrationButton() {
             fontSize: 12,
             transition: "all 0.15s",
           }}
-          className="hover:border-[var(--brand-300)] hover:text-[var(--brand-500)]"
+          className="hover:border-(--brand-300) hover:text-(--brand-500)"
         >
           <Database size={13} strokeWidth={1.8} />
           Migration Tool
@@ -288,7 +292,7 @@ function NavGroup({
           borderRadius: "var(--radius-sm)",
           marginBottom: 2,
         }}
-        className="hover:bg-[var(--bg-hover,#f1f5f9)]"
+        className="hover:bg-(--bg-hover,#f1f5f9)"
       >
         <span
           style={{
@@ -363,9 +367,7 @@ function NavGroup({
                         fontSize: 13.5,
                         transition: "color 0.15s",
                       }}
-                      className={cn(
-                        !active && "hover:text-[var(--text-primary)]",
-                      )}
+                      className={cn(!active && "hover:text-(--text-primary)")}
                     >
                       <Icon size={15} strokeWidth={active ? 2.2 : 1.8} />
                       {item.label}
@@ -382,6 +384,7 @@ function NavGroup({
 }
 
 export function Sidebar({ permissions }: { permissions: string[] }) {
+  const { logo, companyName, isLoading } = useCompanySettings();
   const pathname = usePathname();
 
   return (
@@ -414,13 +417,24 @@ export function Sidebar({ permissions }: { permissions: string[] }) {
             width: 32,
             height: 32,
             borderRadius: "var(--radius-md)",
-            background: "var(--brand-500)",
+            background: logo ? "white" : "var(--brand-500)",
+            border: logo ? "1px solid var(--border-base)" : "none",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Clock size={16} color="white" strokeWidth={3} />
+          {isLoading ? (
+            <Clock size={18} color="white" />
+          ) : logo ? (
+            <img
+              src={logo}
+              alt={companyName}
+              style={{ height: 28, maxWidth: 34, objectFit: "contain" }}
+            />
+          ) : (
+            <Zap size={16} color="white" fill="white" />
+          )}
         </div>
         <div>
           <div
@@ -441,7 +455,7 @@ export function Sidebar({ permissions }: { permissions: string[] }) {
               textTransform: "uppercase",
             }}
           >
-            V3
+            Overtime Management
           </div>
         </div>
       </div>

@@ -1,11 +1,13 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
+import { Clock, Eye, EyeOff, Loader2, CheckCircle2, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -13,6 +15,8 @@ function LoginPageInner() {
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const { logo, companyName, isLoading } = useCompanySettings();
 
   const searchParams = useSearchParams();
   const passwordChanged = searchParams.get("passwordChanged") === "true";
@@ -90,13 +94,25 @@ function LoginPageInner() {
               width: 38,
               height: 38,
               borderRadius: "var(--radius-md)",
-              background: "var(--brand-500)",
+              background: logo ? "white" : "var(--brand-500)",
+              border: logo ? "1px solid var(--border-base)" : "none",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              overflow: "hidden",
             }}
           >
-            <Clock size={18} color="white" />
+            {isLoading ? (
+              <Clock size={18} color="white" />
+            ) : logo ? (
+              <img
+                src={logo}
+                alt={companyName}
+                style={{ height: 28, maxWidth: 34, objectFit: "contain" }}
+              />
+            ) : (
+              <Zap size={16} color="white" fill="white" />
+            )}
           </div>
           <div>
             <div
@@ -107,7 +123,7 @@ function LoginPageInner() {
                 color: "var(--text-primary)",
               }}
             >
-              OTFlow V3
+              OTFlow
             </div>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
               Overtime Management
@@ -277,7 +293,39 @@ function LoginPageInner() {
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        {/* Contact administrator note */}
+        <div
+          style={{
+            marginTop: 18,
+            paddingTop: 14,
+            borderTop: "1px solid var(--border-base)",
+            fontSize: 12,
+            color: "var(--text-muted)",
+            textAlign: "center",
+            lineHeight: 1.5,
+          }}
+        >
+          Need an account or have other access requirements?
+          <br />
+          Contact your administrator.
+        </div>
       </motion.div>
+
+      {/* Developed by badge */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 16,
+          left: "50%",
+          transform: "translateX(-50%)",
+          fontSize: 11,
+          color: "var(--text-muted)",
+          letterSpacing: "0.2px",
+        }}
+      >
+        Developed by Vidun Hettiarachchi
+      </div>
     </div>
   );
 }

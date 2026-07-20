@@ -12,8 +12,10 @@ export default auth((req: any) => {
   const isStatic =
     pathname.startsWith("/_next") || pathname.startsWith("/favicon.ico");
 
-  if (isStatic || isApiAuth) return NextResponse.next();
+  const isPublicApi =
+    pathname === "/api/settings/logo" || pathname === "/api/health/db";
 
+  if (isStatic || isApiAuth || isPublicApi) return NextResponse.next();
   // Not logged in — send to login (except login page itself)
   if (!isLoggedIn && !isLoginPage) {
     return NextResponse.redirect(new URL("/login", req.url));
