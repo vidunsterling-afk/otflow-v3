@@ -35,6 +35,11 @@ const NAV_ITEMS = [
         icon: LayoutDashboard,
         permission: null,
       },
+    ],
+  },
+  {
+    label: "Time & Attendance",
+    items: [
       {
         href: "/ot-entries",
         label: "OT Entries",
@@ -54,16 +59,21 @@ const NAV_ITEMS = [
         permission: PERMISSIONS.TRIPLE_DAYS_MANAGE,
       },
       {
-        href: "/admin/decision-reasons",
-        label: "Decision Reasons",
-        icon: MessageSquare,
-        permission: PERMISSIONS.OT_VIEW,
-      },
-      {
         href: "/fingerprint",
         label: "Fingerprint Logs",
         icon: ScanLine,
         permission: PERMISSIONS.OT_CREATE,
+      },
+    ],
+  },
+  {
+    label: "Configuration",
+    items: [
+      {
+        href: "/admin/decision-reasons",
+        label: "Decision Reasons",
+        icon: MessageSquare,
+        permission: PERMISSIONS.OT_VIEW,
       },
     ],
   },
@@ -138,9 +148,15 @@ function DevMigrationButton() {
       }}
     >
       {state === "idle" ? (
-        <button
+        <motion.button
           onClick={handleClick}
           title="Developer Migration Tool"
+          whileHover={{
+            borderColor: "var(--brand-300)",
+            color: "var(--brand-500)",
+          }}
+          whileTap={{ scale: 0.97 }}
+          transition={{ duration: 0.15 }}
           style={{
             width: "100%",
             display: "flex",
@@ -153,13 +169,11 @@ function DevMigrationButton() {
             cursor: "pointer",
             color: "var(--text-muted)",
             fontSize: 12,
-            transition: "all 0.15s",
           }}
-          className="hover:border-(--brand-300) hover:text-(--brand-500)"
         >
           <Database size={13} strokeWidth={1.8} />
           Migration Tool
-        </button>
+        </motion.button>
       ) : (
         <div
           style={{
@@ -206,8 +220,10 @@ function DevMigrationButton() {
             </div>
           )}
           <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
-            <button
+            <motion.button
               onClick={handleSubmit}
+              whileHover={{ opacity: 0.9 }}
+              whileTap={{ scale: 0.96 }}
               style={{
                 flex: 1,
                 background: "var(--brand-500)",
@@ -221,12 +237,14 @@ function DevMigrationButton() {
               }}
             >
               Enter
-            </button>
-            <button
+            </motion.button>
+            <motion.button
               onClick={() => {
                 setState("idle");
                 setError(false);
               }}
+              whileHover={{ opacity: 0.85 }}
+              whileTap={{ scale: 0.96 }}
               style={{
                 flex: 1,
                 background: "var(--bg-hover, #f1f5f9)",
@@ -239,7 +257,7 @@ function DevMigrationButton() {
               }}
             >
               Cancel
-            </button>
+            </motion.button>
           </div>
         </div>
       )}
@@ -260,11 +278,13 @@ function NavGroup({
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
-  // Keep expanded if active route is inside this group
+  // Is any item in this group the active route?
   const hasActive = group.items.some(
     (item) => pathname === item.href || pathname.startsWith(item.href + "/"),
   );
 
+  // Force the group open whenever its active route changes into view,
+  // even if the user had manually collapsed it.
   useEffect(() => {
     if (hasActive) setOpen(true);
   }, [hasActive]);
@@ -278,8 +298,11 @@ function NavGroup({
   return (
     <div style={{ marginBottom: 4 }}>
       {/* Group header */}
-      <button
+      <motion.button
         onClick={() => setOpen((v) => !v)}
+        whileHover={{ backgroundColor: "var(--bg-hover, #f1f5f9)" }}
+        whileTap={{ scale: 0.98 }}
+        transition={{ duration: 0.15 }}
         style={{
           width: "100%",
           display: "flex",
@@ -292,7 +315,6 @@ function NavGroup({
           borderRadius: "var(--radius-sm)",
           marginBottom: 2,
         }}
-        className="hover:bg-(--bg-hover,#f1f5f9)"
       >
         <span
           style={{
@@ -311,7 +333,7 @@ function NavGroup({
         >
           <ChevronDown size={12} color="var(--text-muted)" />
         </motion.div>
-      </button>
+      </motion.button>
 
       {/* Items */}
       <AnimatePresence initial={false}>
@@ -334,7 +356,11 @@ function NavGroup({
                   href={item.href}
                   style={{ textDecoration: "none" }}
                 >
-                  <div style={{ position: "relative", marginBottom: 2 }}>
+                  <motion.div
+                    style={{ position: "relative", marginBottom: 2 }}
+                    whileHover={!active ? { x: 2 } : undefined}
+                    transition={{ duration: 0.15 }}
+                  >
                     {active && (
                       <motion.div
                         layoutId="sidebar-active"
@@ -352,7 +378,13 @@ function NavGroup({
                         }}
                       />
                     )}
-                    <div
+                    <motion.div
+                      whileHover={
+                        !active
+                          ? { backgroundColor: "var(--bg-hover, #f1f5f9)" }
+                          : undefined
+                      }
+                      transition={{ duration: 0.15 }}
                       style={{
                         position: "relative",
                         display: "flex",
@@ -365,14 +397,19 @@ function NavGroup({
                           : "var(--text-secondary)",
                         fontWeight: active ? 600 : 400,
                         fontSize: 13.5,
-                        transition: "color 0.15s",
                       }}
                       className={cn(!active && "hover:text-(--text-primary)")}
                     >
-                      <Icon size={15} strokeWidth={active ? 2.2 : 1.8} />
+                      <motion.span
+                        whileHover={{ scale: 1.12 }}
+                        transition={{ duration: 0.15 }}
+                        style={{ display: "flex" }}
+                      >
+                        <Icon size={15} strokeWidth={active ? 2.2 : 1.8} />
+                      </motion.span>
                       {item.label}
-                    </div>
-                  </div>
+                    </motion.div>
+                  </motion.div>
                 </Link>
               );
             })}
