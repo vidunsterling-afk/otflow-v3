@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OTFlow V3",
+  title: "OTFlow",
   description: "Overtime Management System",
 };
 

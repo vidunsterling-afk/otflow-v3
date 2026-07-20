@@ -6,6 +6,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SessionCountdown } from "@/components/layout/SessionCountdown";
 import { NotificationBell } from "@/components/layout/NotificationBell";
+import { TimePill } from "../ui/time-pill";
 
 interface TopbarProps {
   user: {
@@ -34,12 +35,8 @@ export function Topbar({ user }: TopbarProps) {
         zIndex: 30,
       }}
     >
-      {/* Left — page title placeholder (per-page via slot) */}
-      <div
-        style={{ fontSize: 14, color: "var(--text-muted)", fontWeight: 500 }}
-      >
-        Overtime Management System
-      </div>
+      {/* Left — time */}
+      <TimePill />
 
       {/* Right */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
