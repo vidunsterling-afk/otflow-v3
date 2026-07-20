@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import {
   format,
   startOfWeek,
@@ -15,12 +15,22 @@ import {
   endOfYear,
 } from "date-fns";
 
+// ── Value helpers ─────────────────────────────────────────────────────────────
 function toHrs(mins: number): number {
   return mins > 0 ? Math.round((mins / 60) * 100) / 100 : 0;
 }
 
 function fmt(mins: number): string | number {
   return mins > 0 ? toHrs(mins) : "";
+}
+
+function colLetter(n: number): string {
+  let s = "";
+  while (n >= 0) {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  }
+  return s;
 }
 
 function buildDateRange(
@@ -50,88 +60,191 @@ function buildDateRange(
   };
 }
 
-// Style helpers — apply to a cell address
-function styleCell(ws: XLSX.WorkSheet, addr: string, style: any) {
-  if (!ws[addr]) ws[addr] = { t: "s", v: "" };
-  ws[addr].s = style;
-}
-
-const HEADER_STYLE = {
-  font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
-  fill: { fgColor: { rgb: "2563EB" } },
-  alignment: { horizontal: "center" },
-  border: {
-    bottom: { style: "thin", color: { rgb: "1D4ED8" } },
-    right: { style: "thin", color: { rgb: "1D4ED8" } },
-  },
-};
-const EMP_HEADER_STYLE = {
-  font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
-  fill: { fgColor: { rgb: "1E40AF" } },
-  alignment: { horizontal: "left" },
-};
-const SUBTOTAL_STYLE = {
-  font: { bold: true, sz: 9, color: { rgb: "1E3A5F" } },
-  fill: { fgColor: { rgb: "DBEAFE" } },
-  alignment: { horizontal: "right" },
-};
-const META_LABEL_STYLE = {
-  font: { bold: true, sz: 9, color: { rgb: "374151" } },
-};
-const META_VALUE_STYLE = {
-  font: { sz: 9, color: { rgb: "111827" } },
-};
-const ALT_ROW_STYLE = {
-  fill: { fgColor: { rgb: "F8FAFF" } },
-  font: { sz: 9 },
-};
-const NORMAL_ROW_STYLE = {
-  font: { sz: 9 },
-};
-const SUMMARY_TOTAL_STYLE = {
-  font: { bold: true, sz: 10, color: { rgb: "1E3A5F" } },
-  fill: { fgColor: { rgb: "EFF6FF" } },
-};
-
-function colLetter(n: number): string {
-  let s = "";
-  while (n >= 0) {
-    s = String.fromCharCode(65 + (n % 26)) + s;
-    n = Math.floor(n / 26) - 1;
+// ── Logo fetch/decode ────────────────────────────────────────────────────────
+async function fetchCompanyLogo(
+  req: NextRequest,
+): Promise<{ logo: string | null; companyName: string } | null> {
+  try {
+    const url = new URL("/api/settings/logo", req.url);
+    const res = await fetch(url, {
+      headers: { cookie: req.headers.get("cookie") ?? "" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
   }
-  return s;
 }
 
-function setColWidths(ws: XLSX.WorkSheet, widths: number[]) {
-  ws["!cols"] = widths.map((w) => ({ wch: w }));
+function dataUrlToBuffer(
+  dataUrl: string,
+): { buffer: Buffer; extension: "png" | "jpeg" } | null {
+  const match = /^data:image\/(png|jpe?g);base64,(.+)$/i.exec(dataUrl);
+  if (!match) return null;
+  const extension =
+    match[1].toLowerCase() === "jpg"
+      ? "jpeg"
+      : (match[1].toLowerCase() as "png" | "jpeg");
+  return { buffer: Buffer.from(match[2], "base64"), extension };
+}
+
+// ── Style helpers ────────────────────────────────────────────────────────────
+const BORDER_COLOR = "FFE2E8F0";
+const THIN = { style: "thin" as const, color: { argb: BORDER_COLOR } };
+const CELL_BORDER: Partial<ExcelJS.Borders> = {
+  top: THIN,
+  left: THIN,
+  bottom: THIN,
+  right: THIN,
+};
+
+function applyBorder(cell: ExcelJS.Cell) {
+  cell.border = CELL_BORDER;
+}
+
+function styleHeaderCell(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF2563EB" },
+  };
+  cell.alignment = { horizontal: "center", vertical: "middle" };
+  applyBorder(cell);
+}
+
+function styleDataCell(cell: ExcelJS.Cell, alt: boolean) {
+  cell.font = { size: 9, color: { argb: "FF1F2937" } };
+  if (alt) {
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFF8FAFF" },
+    };
+  }
+  cell.alignment = { vertical: "middle" };
+  applyBorder(cell);
+}
+
+function styleSubtotalCell(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 9, color: { argb: "FF1E3A5F" } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFDBEAFE" },
+  };
+  cell.alignment = { horizontal: "right", vertical: "middle" };
+  applyBorder(cell);
+}
+
+function styleTotalCell(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 10, color: { argb: "FF1E3A5F" } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFEFF6FF" },
+  };
+  applyBorder(cell);
+}
+
+function styleSectionHeaderCell(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 10, color: { argb: "FF1E3A5F" } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFEFF6FF" },
+  };
+  applyBorder(cell);
+}
+
+interface ReportMeta {
+  scope: string;
+  dateFrom: string;
+  dateTo: string;
+  statusFilter: string;
+  companyName: string;
+  generatedAt: string;
+}
+
+function addTitleBlock(
+  wb: ExcelJS.Workbook,
+  ws: ExcelJS.Worksheet,
+  meta: ReportMeta,
+  numCols: number,
+  logoBuffer: Buffer | null,
+  logoExt: "png" | "jpeg" | null,
+  reportTitle: string,
+) {
+  const lastCol = colLetter(numCols - 1);
+  const align = logoBuffer ? "right" : "left";
+
+  ws.mergeCells(`A1:${lastCol}1`);
+  ws.getRow(1).height = 34;
+  const nameCell = ws.getCell("A1");
+  nameCell.value = meta.companyName || "OTFlow";
+  nameCell.font = { bold: true, size: 16, color: { argb: "FF1E3A5F" } };
+  nameCell.alignment = { vertical: "middle", horizontal: align, indent: 1 };
+
+  ws.mergeCells(`A2:${lastCol}2`);
+  ws.getRow(2).height = 22;
+  const titleCell = ws.getCell("A2");
+  titleCell.value = reportTitle;
+  titleCell.font = { bold: true, size: 12, color: { argb: "FF2563EB" } };
+  titleCell.alignment = { vertical: "middle", horizontal: align, indent: 1 };
+
+  if (logoBuffer && logoExt) {
+    const imageId = wb.addImage({
+      buffer: logoBuffer as unknown as ExcelJS.Buffer,
+      extension: logoExt,
+    });
+    ws.addImage(imageId, {
+      tl: { col: 0.15, row: 0.15 },
+      ext: { width: 130, height: 46 },
+    });
+  }
+
+  ws.addRow([]);
+
+  const metaRows: [string, string][] = [
+    ["Scope", meta.scope],
+    ["Period", `${meta.dateFrom} → ${meta.dateTo}`],
+    ["Status Filter", meta.statusFilter],
+    ["Generated At", meta.generatedAt],
+  ];
+  for (const [label, value] of metaRows) {
+    const row = ws.addRow([label, value]);
+    row.getCell(1).font = { bold: true, size: 9, color: { argb: "FF374151" } };
+    row.getCell(2).font = { size: 9, color: { argb: "FF111827" } };
+  }
+
+  ws.addRow([]);
 }
 
 // ── SHEET 1: Summary ─────────────────────────────────────────────────────────
 function buildSummarySheet(
+  wb: ExcelJS.Workbook,
   entries: any[],
-  meta: {
-    scope: string;
-    dateFrom: string;
-    dateTo: string;
-    statusFilter: string;
-    companyName: string;
-    generatedAt: string;
-  },
+  meta: ReportMeta,
+  logoBuffer: Buffer | null,
+  logoExt: "png" | "jpeg" | null,
 ) {
-  const ws: XLSX.WorkSheet = {};
-  const rows: any[][] = [];
+  const ws = wb.addWorksheet("Summary");
+  const NUM_COLS = 11;
+  ws.columns = [12, 26, 8, 8, 10, 9, 14, 14, 14, 12, 14].map((w) => ({
+    width: w,
+  }));
 
-  // Title block
-  rows.push([meta.companyName || "OTFlow"]);
-  rows.push(["OVERTIME REPORT - SUMMARY"]);
-  rows.push([]);
-  rows.push(["Scope", meta.scope]);
-  rows.push(["Period", `${meta.dateFrom} → ${meta.dateTo}`]);
-  rows.push(["Status Filter", meta.statusFilter]);
-  rows.push(["Generated At", meta.generatedAt]);
-  rows.push([]);
+  addTitleBlock(
+    wb,
+    ws,
+    meta,
+    NUM_COLS,
+    logoBuffer,
+    logoExt,
+    "OVERTIME REPORT — SUMMARY",
+  );
 
-  // Overall
   const pending = entries.filter((e) => e.status === "PENDING").length;
   const approved = entries.filter((e) => e.status === "APPROVED").length;
   const rejected = entries.filter((e) => e.status === "REJECTED").length;
@@ -140,23 +253,37 @@ function buildSummarySheet(
   const totalTriple = entries.reduce((s, e) => s + e.tripleMinutes, 0);
   const totalApproved = entries.reduce((s, e) => s + e.approvedTotalMinutes, 0);
 
-  rows.push(["OVERALL SUMMARY"]);
-  rows.push(["Records", entries.length]);
-  rows.push(["Pending", pending]);
-  rows.push(["Approved", approved]);
-  rows.push(["Rejected", rejected]);
-  rows.push([]);
-  rows.push(["Normal OT (hrs)", fmt(totalNormal)]);
-  rows.push(["Double OT (hrs)", fmt(totalDouble)]);
-  rows.push(["Triple OT (hrs)", fmt(totalTriple)]);
-  rows.push(["Total OT (hrs)", fmt(totalNormal + totalDouble + totalTriple)]);
-  rows.push(["Approved Total (hrs)", fmt(totalApproved)]);
-  rows.push([]);
+  const overallHeaderRow = ws.addRow(["OVERALL SUMMARY"]);
+  ws.mergeCells(
+    `A${overallHeaderRow.number}:${colLetter(NUM_COLS - 1)}${overallHeaderRow.number}`,
+  );
+  styleSectionHeaderCell(overallHeaderRow.getCell(1));
 
-  // Employee-wise summary table header
-  const empTableStart = rows.length;
-  rows.push(["EMPLOYEE-WISE SUMMARY"]);
-  rows.push([
+  const overallRows: [string, number][] = [
+    ["Records", entries.length],
+    ["Pending", pending],
+    ["Approved", approved],
+    ["Rejected", rejected],
+    ["Normal OT (hrs)", toHrs(totalNormal)],
+    ["Double OT (hrs)", toHrs(totalDouble)],
+    ["Triple OT (hrs)", toHrs(totalTriple)],
+    ["Total OT (hrs)", toHrs(totalNormal + totalDouble + totalTriple)],
+    ["Approved Total (hrs)", toHrs(totalApproved)],
+  ];
+  for (const [label, value] of overallRows) {
+    const row = ws.addRow([label, value]);
+    row.getCell(1).font = { bold: true, size: 9, color: { argb: "FF374151" } };
+    row.getCell(2).font = { size: 9, color: { argb: "FF111827" } };
+  }
+  ws.addRow([]);
+
+  const empSectionRow = ws.addRow(["EMPLOYEE-WISE SUMMARY"]);
+  ws.mergeCells(
+    `A${empSectionRow.number}:${colLetter(NUM_COLS - 1)}${empSectionRow.number}`,
+  );
+  styleSectionHeaderCell(empSectionRow.getCell(1));
+
+  const headerRow = ws.addRow([
     "Emp ID",
     "Employee Name",
     "Count",
@@ -169,8 +296,8 @@ function buildSummarySheet(
     "Total (Hrs)",
     "Approved (Hrs)",
   ]);
+  headerRow.eachCell((cell) => styleHeaderCell(cell));
 
-  // Group by employee
   const empMap = new Map<string, any>();
   for (const e of entries) {
     const key = e.employee.empId;
@@ -199,152 +326,82 @@ function buildSummarySheet(
     r.approvedMins += e.approvedTotalMinutes;
   }
 
-  let empRowIdx = empTableStart + 2;
+  let alt = false;
   for (const [, r] of empMap) {
-    rows.push([
+    const row = ws.addRow([
       r.empId,
       r.name,
       r.count,
       r.pending,
       r.approved,
       r.rejected,
-      fmt(r.normal),
-      fmt(r.double),
-      fmt(r.triple),
-      fmt(r.normal + r.double + r.triple),
-      fmt(r.approvedMins),
+      toHrs(r.normal),
+      toHrs(r.double),
+      toHrs(r.triple),
+      toHrs(r.normal + r.double + r.triple),
+      toHrs(r.approvedMins),
     ]);
-    empRowIdx++;
+    row.eachCell((cell, colNum) => {
+      styleDataCell(cell, alt);
+      if (colNum >= 7) cell.numFmt = "0.00";
+    });
+    alt = !alt;
   }
 
-  // Totals row
-  rows.push([
+  const totalRow = ws.addRow([
     "",
     "TOTAL",
-    empMap.size > 0 ? entries.length : 0,
+    entries.length,
     pending,
     approved,
     rejected,
-    fmt(totalNormal),
-    fmt(totalDouble),
-    fmt(totalTriple),
-    fmt(totalNormal + totalDouble + totalTriple),
-    fmt(totalApproved),
+    toHrs(totalNormal),
+    toHrs(totalDouble),
+    toHrs(totalTriple),
+    toHrs(totalNormal + totalDouble + totalTriple),
+    toHrs(totalApproved),
   ]);
-
-  // Write all rows
-  XLSX.utils.sheet_add_aoa(ws, rows, { origin: "A1" });
-
-  // Styles
-  styleCell(ws, "A1", {
-    font: { bold: true, sz: 15, color: { rgb: "1E3A5F" } },
-  });
-  styleCell(ws, "A2", {
-    font: { bold: true, sz: 12, color: { rgb: "2563EB" } },
+  totalRow.eachCell((cell, colNum) => {
+    styleTotalCell(cell);
+    if (colNum >= 7) cell.numFmt = "0.00";
   });
 
-  for (let i = 4; i <= 7; i++) {
-    styleCell(ws, `A${i}`, META_LABEL_STYLE);
-    styleCell(ws, `B${i}`, META_VALUE_STYLE);
-  }
-
-  // Overall summary section header
-  styleCell(ws, `A9`, {
-    font: { bold: true, sz: 10, color: { rgb: "1E3A5F" } },
-    fill: { fgColor: { rgb: "EFF6FF" } },
-  });
-
-  // Emp table section header
-  const eTs = empTableStart + 1;
-  styleCell(ws, `A${eTs}`, {
-    font: { bold: true, sz: 10, color: { rgb: "1E3A5F" } },
-    fill: { fgColor: { rgb: "EFF6FF" } },
-  });
-
-  const empHdrRow = empTableStart + 2;
-  ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"].forEach((col) => {
-    styleCell(ws, `${col}${empHdrRow}`, HEADER_STYLE);
-  });
-
-  // Data rows alternate color
-  let dataRowN = empTableStart + 3;
-  let alt = false;
-  for (const _ of empMap) {
-    const style = alt ? ALT_ROW_STYLE : NORMAL_ROW_STYLE;
-    ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"].forEach((col) => {
-      styleCell(ws, `${col}${dataRowN}`, style);
-    });
-    alt = !alt;
-    dataRowN++;
-  }
-
-  // Totals row
-  ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"].forEach((col) => {
-    styleCell(ws, `${col}${dataRowN}`, SUMMARY_TOTAL_STYLE);
-  });
-
-  // Merges: title spans
-  ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 10 } },
-    { s: { r: 8, c: 0 }, e: { r: 8, c: 10 } },
-    { s: { r: empTableStart, c: 0 }, e: { r: empTableStart, c: 10 } },
-  ];
-
-  ws["!ref"] = XLSX.utils.encode_range({
-    s: { r: 0, c: 0 },
-    e: { r: rows.length, c: 10 },
-  });
-  setColWidths(ws, [12, 26, 8, 8, 10, 9, 14, 14, 14, 12, 14]);
-
-  return ws;
+  ws.views = [{ state: "frozen", ySplit: headerRow.number }];
 }
 
 // ── SHEET 2: Employee-wise Records ────────────────────────────────────────────
 function buildRecordsSheet(
+  wb: ExcelJS.Workbook,
   entries: any[],
-  meta: {
-    scope: string;
-    dateFrom: string;
-    dateTo: string;
-    statusFilter: string;
-    companyName: string;
-    generatedAt: string;
-  },
+  meta: ReportMeta,
+  logoBuffer: Buffer | null,
+  logoExt: "png" | "jpeg" | null,
 ) {
-  const ws: XLSX.WorkSheet = {};
-  const rows: any[][] = [];
+  const ws = wb.addWorksheet("Records");
+  const NUM_COLS = 12;
+  ws.columns = [13, 10, 6, 9, 9, 13, 13, 13, 12, 13, 11, 20].map((w) => ({
+    width: w,
+  }));
 
-  // Title
-  rows.push([meta.companyName || "OTFlow"]);
-  rows.push(["OVERTIME RECORDS - DETAILED"]);
-  rows.push([]);
-  rows.push(["Scope", meta.scope]);
-  rows.push(["Period", `${meta.dateFrom} → ${meta.dateTo}`]);
-  rows.push(["Status Filter", meta.statusFilter]);
-  rows.push(["Generated At", meta.generatedAt]);
-  rows.push([]);
+  addTitleBlock(
+    wb,
+    ws,
+    meta,
+    NUM_COLS,
+    logoBuffer,
+    logoExt,
+    "OVERTIME RECORDS — DETAILED",
+  );
 
-  // Group entries by employee
   const empMap = new Map<string, any[]>();
   for (const e of entries) {
     const key = e.employee.empId;
     if (!empMap.has(key)) empMap.set(key, []);
     empMap.get(key)!.push(e);
   }
-
-  // Sort employees by empId
   const sortedEmps = Array.from(empMap.entries()).sort((a, b) =>
     a[0].localeCompare(b[0]),
   );
-
-  const merges: XLSX.Range[] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 11 } },
-    { s: { r: 8, c: 0 }, e: { r: 8, c: 11 } }, // placeholder, updated below
-  ];
-  // Remove the placeholder at index 2 — we'll add proper ones as we go
-  merges.splice(2, 1);
 
   const COL_HEADERS = [
     "Work Date",
@@ -360,51 +417,45 @@ function buildRecordsSheet(
     "Status",
     "Decision Reason",
   ];
-  const NUM_COLS = COL_HEADERS.length;
-
-  let currentRow = rows.length; // row index (0-based) of next row to add
 
   for (const [empId, empEntries] of sortedEmps) {
     const empName = empEntries[0].employee.name;
 
-    // Employee section header row
-    const empHdrRowIdx = currentRow;
-    rows.push([
-      `EMPLOYEE: ${empId} - ${empName}`,
-      ...Array(NUM_COLS - 1).fill(""),
-    ]);
-    merges.push({
-      s: { r: empHdrRowIdx, c: 0 },
-      e: { r: empHdrRowIdx, c: NUM_COLS - 1 },
-    });
-    currentRow++;
+    const empHeaderRow = ws.addRow([`EMPLOYEE: ${empId} — ${empName}`]);
+    ws.mergeCells(
+      `A${empHeaderRow.number}:${colLetter(NUM_COLS - 1)}${empHeaderRow.number}`,
+    );
+    const empCell = empHeaderRow.getCell(1);
+    empCell.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
+    empCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF1E40AF" },
+    };
+    empCell.alignment = { vertical: "middle", indent: 1 };
+    applyBorder(empCell);
 
-    // Column headers
-    const colHdrRowIdx = currentRow;
-    rows.push(COL_HEADERS);
-    currentRow++;
+    const colHeaderRow = ws.addRow(COL_HEADERS);
+    colHeaderRow.eachCell((cell) => styleHeaderCell(cell));
 
-    // Data rows
     let nightCount = 0;
     let subNormal = 0,
       subDouble = 0,
       subTriple = 0,
       subApproved = 0;
-    let altRow = false;
+    let alt = false;
 
     for (const e of empEntries) {
-      const isNight = e.isNight ? "1" : "";
       if (e.isNight) nightCount++;
       subNormal += e.normalMinutes;
       subDouble += e.doubleMinutes;
       subTriple += e.tripleMinutes;
       subApproved += e.approvedTotalMinutes;
 
-      const dataRowIdx = currentRow;
-      rows.push([
+      const row = ws.addRow([
         e.workDate,
         e.shift,
-        isNight,
+        e.isNight ? "1" : "",
         e.inTime ?? "",
         e.outTime ?? "",
         fmt(e.normalMinutes),
@@ -415,20 +466,16 @@ function buildRecordsSheet(
         e.status,
         e.decisionReason ?? "",
       ]);
-
-      // Style data row
-      const rowStyle = altRow ? ALT_ROW_STYLE : NORMAL_ROW_STYLE;
-      for (let c = 0; c < NUM_COLS; c++) {
-        const addr = `${colLetter(c)}${dataRowIdx + 1}`;
-        styleCell(ws, addr, rowStyle);
-      }
-      altRow = !altRow;
-      currentRow++;
+      row.eachCell((cell, colNum) => {
+        styleDataCell(cell, alt);
+        if (colNum >= 6 && colNum <= 10 && typeof cell.value === "number") {
+          cell.numFmt = "0.00";
+        }
+      });
+      alt = !alt;
     }
 
-    // Subtotal row
-    const subRowIdx = currentRow;
-    rows.push([
+    const subRow = ws.addRow([
       "",
       "",
       nightCount,
@@ -442,77 +489,40 @@ function buildRecordsSheet(
       "",
       "",
     ]);
-    for (let c = 0; c < NUM_COLS; c++) {
-      styleCell(ws, `${colLetter(c)}${subRowIdx + 1}`, SUBTOTAL_STYLE);
-    }
-    currentRow++;
+    subRow.eachCell((cell, colNum) => {
+      styleSubtotalCell(cell);
+      if (colNum >= 6 && colNum <= 10 && typeof cell.value === "number") {
+        cell.numFmt = "0.00";
+      }
+    });
 
-    // Gap row
-    rows.push([]);
-    currentRow++;
-
-    // Apply styles to emp header row
-    for (let c = 0; c < NUM_COLS; c++) {
-      styleCell(ws, `${colLetter(c)}${empHdrRowIdx + 1}`, EMP_HEADER_STYLE);
-    }
-    // Column headers
-    for (let c = 0; c < NUM_COLS; c++) {
-      styleCell(ws, `${colLetter(c)}${colHdrRowIdx + 1}`, HEADER_STYLE);
-    }
+    ws.addRow([]);
   }
-
-  // Write all rows
-  XLSX.utils.sheet_add_aoa(ws, rows, { origin: "A1" });
-
-  // Title styles
-  styleCell(ws, "A1", {
-    font: { bold: true, sz: 15, color: { rgb: "1E3A5F" } },
-  });
-  styleCell(ws, "A2", {
-    font: { bold: true, sz: 12, color: { rgb: "2563EB" } },
-  });
-  for (let i = 4; i <= 7; i++) {
-    styleCell(ws, `A${i}`, META_LABEL_STYLE);
-    styleCell(ws, `B${i}`, META_VALUE_STYLE);
-  }
-
-  ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: NUM_COLS - 1 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: NUM_COLS - 1 } },
-    ...merges,
-  ];
-
-  ws["!ref"] = XLSX.utils.encode_range({
-    s: { r: 0, c: 0 },
-    e: { r: rows.length, c: NUM_COLS - 1 },
-  });
-  setColWidths(ws, [13, 10, 6, 9, 9, 13, 13, 13, 12, 13, 11, 20]);
-
-  return ws;
 }
 
 // ── SHEET: Flat daily view (used for single-date exports) ─────────────────────
 function buildDailySheet(
+  wb: ExcelJS.Workbook,
   entries: any[],
-  meta: {
-    scope: string;
-    dateFrom: string;
-    dateTo: string;
-    statusFilter: string;
-    companyName: string;
-    generatedAt: string;
-  },
+  meta: ReportMeta,
+  logoBuffer: Buffer | null,
+  logoExt: "png" | "jpeg" | null,
 ) {
-  const ws: XLSX.WorkSheet = {};
-  const rows: any[][] = [];
+  const ws = wb.addWorksheet("Daily Records");
+  const NUM_COLS = 13;
+  ws.columns = [10, 24, 10, 9, 9, 13, 13, 13, 14, 6, 7, 10, 20].map((w) => ({
+    width: w,
+  }));
 
-  rows.push([meta.companyName || "OTFlow"]);
-  rows.push([`DAILY OT REPORT — ${meta.dateFrom}`]);
-  rows.push([]);
-  rows.push(["Date", meta.dateFrom]);
-  rows.push(["Status Filter", meta.statusFilter]);
-  rows.push(["Generated At", meta.generatedAt]);
-  rows.push([]);
+  addTitleBlock(
+    wb,
+    ws,
+    meta,
+    NUM_COLS,
+    logoBuffer,
+    logoExt,
+    `DAILY OT REPORT — ${meta.dateFrom}`,
+  );
 
   const totalNormal = entries.reduce((s, e) => s + e.normalMinutes, 0);
   const totalDouble = entries.reduce((s, e) => s + e.doubleMinutes, 0);
@@ -522,20 +532,30 @@ function buildDailySheet(
   const approved = entries.filter((e) => e.status === "APPROVED").length;
   const rejected = entries.filter((e) => e.status === "REJECTED").length;
 
-  rows.push(["SUMMARY"]);
-  rows.push(["Total Entries", entries.length]);
-  rows.push(["Pending", pending]);
-  rows.push(["Approved", approved]);
-  rows.push(["Rejected", rejected]);
-  rows.push(["Normal OT (hrs)", fmt(totalNormal)]);
-  rows.push(["Double OT (hrs)", fmt(totalDouble)]);
-  rows.push(["Triple OT (hrs)", fmt(totalTriple)]);
-  rows.push(["Approved OT (hrs)", fmt(totalApproved)]);
-  rows.push([]);
+  const summaryHeaderRow = ws.addRow(["SUMMARY"]);
+  ws.mergeCells(
+    `A${summaryHeaderRow.number}:${colLetter(NUM_COLS - 1)}${summaryHeaderRow.number}`,
+  );
+  styleSectionHeaderCell(summaryHeaderRow.getCell(1));
 
-  const tableStart = rows.length;
+  const summaryRows: [string, number][] = [
+    ["Total Entries", entries.length],
+    ["Pending", pending],
+    ["Approved", approved],
+    ["Rejected", rejected],
+    ["Normal OT (hrs)", toHrs(totalNormal)],
+    ["Double OT (hrs)", toHrs(totalDouble)],
+    ["Triple OT (hrs)", toHrs(totalTriple)],
+    ["Approved OT (hrs)", toHrs(totalApproved)],
+  ];
+  for (const [label, value] of summaryRows) {
+    const row = ws.addRow([label, value]);
+    row.getCell(1).font = { bold: true, size: 9, color: { argb: "FF374151" } };
+    row.getCell(2).font = { size: 9, color: { argb: "FF111827" } };
+  }
+  ws.addRow([]);
 
-  rows.push([
+  const headerRow = ws.addRow([
     "Emp ID",
     "Employee Name",
     "Shift",
@@ -550,6 +570,7 @@ function buildDailySheet(
     "Status",
     "Decision Reason",
   ]);
+  headerRow.eachCell((cell) => styleHeaderCell(cell));
 
   const sorted = [...entries].sort((a, b) => {
     if (a.status !== b.status) return a.status.localeCompare(b.status);
@@ -558,7 +579,7 @@ function buildDailySheet(
 
   let alt = false;
   for (const e of sorted) {
-    rows.push([
+    const row = ws.addRow([
       e.employee.empId,
       e.employee.name,
       e.shift,
@@ -573,17 +594,16 @@ function buildDailySheet(
       e.status,
       e.decisionReason ?? "",
     ]);
-
-    const rowIdx = rows.length;
-    const style = alt ? ALT_ROW_STYLE : NORMAL_ROW_STYLE;
-    for (let c = 0; c < 13; c++) {
-      styleCell(ws, `${colLetter(c)}${rowIdx}`, style);
-    }
+    row.eachCell((cell, colNum) => {
+      styleDataCell(cell, alt);
+      if (colNum >= 6 && colNum <= 9 && typeof cell.value === "number") {
+        cell.numFmt = "0.00";
+      }
+    });
     alt = !alt;
   }
 
-  // Total row
-  rows.push([
+  const totalRow = ws.addRow([
     "",
     "TOTAL",
     "",
@@ -598,51 +618,14 @@ function buildDailySheet(
     "",
     "",
   ]);
-  const totalRowIdx = rows.length;
-  for (let c = 0; c < 13; c++) {
-    styleCell(ws, `${colLetter(c)}${totalRowIdx}`, SUMMARY_TOTAL_STYLE);
-  }
-
-  XLSX.utils.sheet_add_aoa(ws, rows, { origin: "A1" });
-
-  styleCell(ws, "A1", {
-    font: { bold: true, sz: 15, color: { rgb: "1E3A5F" } },
-  });
-  styleCell(ws, "A2", {
-    font: { bold: true, sz: 12, color: { rgb: "2563EB" } },
-  });
-  for (let i = 4; i <= 6; i++) {
-    styleCell(ws, `A${i}`, META_LABEL_STYLE);
-    styleCell(ws, `B${i}`, META_VALUE_STYLE);
-  }
-
-  // Summary section header
-  styleCell(ws, "A8", {
-    font: { bold: true, sz: 10, color: { rgb: "1E3A5F" } },
-    fill: { fgColor: { rgb: "EFF6FF" } },
+  totalRow.eachCell((cell, colNum) => {
+    styleTotalCell(cell);
+    if (colNum >= 6 && colNum <= 9 && typeof cell.value === "number") {
+      cell.numFmt = "0.00";
+    }
   });
 
-  // Table header row
-  const hdrRow = tableStart + 1;
-  ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M"].forEach(
-    (col) => {
-      styleCell(ws, `${col}${hdrRow}`, HEADER_STYLE);
-    },
-  );
-
-  ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 12 } },
-    { s: { r: 7, c: 0 }, e: { r: 7, c: 12 } },
-  ];
-
-  ws["!ref"] = XLSX.utils.encode_range({
-    s: { r: 0, c: 0 },
-    e: { r: rows.length, c: 12 },
-  });
-  setColWidths(ws, [10, 24, 10, 9, 9, 13, 13, 13, 14, 6, 7, 10, 20]);
-
-  return ws;
+  ws.views = [{ state: "frozen", ySplit: headerRow.number }];
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -657,7 +640,7 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
   const status = searchParams.get("status") ?? "ALL";
   const employeeId = searchParams.get("employeeId") ?? "";
-  const companyName = searchParams.get("companyName") ?? "OTFlow";
+  const companyNameParam = searchParams.get("companyName") ?? "";
 
   const { dateFrom, dateTo } = buildDateRange(range, from, to, new Date());
 
@@ -665,14 +648,20 @@ export async function GET(req: NextRequest) {
   if (status !== "ALL") where.status = status;
   if (employeeId) where.employeeId = employeeId;
 
-  const entries = await prisma.otEntry.findMany({
-    where,
-    include: {
-      employee: { select: { name: true, empId: true } },
-      decidedBy: { select: { username: true } },
-    },
-    orderBy: [{ employee: { empId: "asc" } }, { workDate: "asc" }],
-  });
+  const [entries, settings] = await Promise.all([
+    prisma.otEntry.findMany({
+      where,
+      include: {
+        employee: { select: { name: true, empId: true } },
+        decidedBy: { select: { username: true } },
+      },
+      orderBy: [{ employee: { empId: "asc" } }, { workDate: "asc" }],
+    }),
+    fetchCompanyLogo(req),
+  ]);
+
+  const companyName = companyNameParam || settings?.companyName || "OTFlow";
+  const logoImage = settings?.logo ? dataUrlToBuffer(settings.logo) : null;
 
   const scopeLabel =
     range === "day"
@@ -685,7 +674,7 @@ export async function GET(req: NextRequest) {
             ? "YEARLY"
             : "CUSTOM";
 
-  const meta = {
+  const meta: ReportMeta = {
     scope: scopeLabel,
     dateFrom,
     dateTo,
@@ -694,31 +683,40 @@ export async function GET(req: NextRequest) {
     generatedAt: new Date().toLocaleString(),
   };
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, buildSummarySheet(entries, meta), "Summary");
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "OTFlow";
+  wb.created = new Date();
+
+  buildSummarySheet(
+    wb,
+    entries,
+    meta,
+    logoImage?.buffer ?? null,
+    logoImage?.extension ?? null,
+  );
 
   if (range === "day") {
-    XLSX.utils.book_append_sheet(
+    buildDailySheet(
       wb,
-      buildDailySheet(entries, meta),
-      "Daily Records",
+      entries,
+      meta,
+      logoImage?.buffer ?? null,
+      logoImage?.extension ?? null,
     );
   } else {
-    XLSX.utils.book_append_sheet(
+    buildRecordsSheet(
       wb,
-      buildRecordsSheet(entries, meta),
-      "Records",
+      entries,
+      meta,
+      logoImage?.buffer ?? null,
+      logoImage?.extension ?? null,
     );
   }
 
-  const buffer = XLSX.write(wb, {
-    type: "buffer",
-    bookType: "xlsx",
-    cellStyles: true,
-  });
+  const buffer = await wb.xlsx.writeBuffer();
   const filename = `OTFlow_${scopeLabel}_${dateFrom}_${dateTo}.xlsx`;
 
-  return new NextResponse(buffer, {
+  return new NextResponse(Buffer.from(buffer), {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

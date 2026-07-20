@@ -63,3 +63,37 @@ export function getStatusColor(status: string) {
       };
   }
 }
+
+export function getPageNumbers(
+  current: number,
+  total: number,
+  maxVisible = 7,
+): (number | "...")[] {
+  if (total <= maxVisible) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const pages: (number | "...")[] = [];
+  const siblingCount = 1;
+  const leftSibling = Math.max(current - siblingCount, 1);
+  const rightSibling = Math.min(current + siblingCount, total);
+
+  const showLeftEllipsis = leftSibling > 2;
+  const showRightEllipsis = rightSibling < total - 1;
+
+  pages.push(1);
+  if (showLeftEllipsis) pages.push("...");
+
+  for (
+    let p = Math.max(leftSibling, 2);
+    p <= Math.min(rightSibling, total - 1);
+    p++
+  ) {
+    pages.push(p);
+  }
+
+  if (showRightEllipsis) pages.push("...");
+  pages.push(total);
+
+  return pages;
+}

@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { formatMinutes, formatDate } from "@/lib/utils";
+import { formatMinutes, formatDate, getPageNumbers } from "@/lib/utils";
 import { Input, Select } from "@/components/ui/FormField";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -807,6 +807,107 @@ export default function OtLogsPage() {
           </div>
         )}
 
+        {/* Pagination */}
+        {data && data.totalPages > 1 && (
+          <div
+            className="no-print"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 16px",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-base)",
+              borderRadius: "var(--radius-md)",
+            }}
+          >
+            <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+              Showing {(page - 1) * 50 + 1}–{Math.min(page * 50, data.total)} of{" "}
+              {data.total} entries
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--border-base)",
+                  background: "var(--bg-card)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: page === 1 ? "not-allowed" : "pointer",
+                  opacity: page === 1 ? 0.4 : 1,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              {getPageNumbers(page, data.totalPages).map((p, i) =>
+                p === "..." ? (
+                  <div
+                    key={`ellipsis-${i}`}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--text-muted)",
+                      fontSize: 12.5,
+                    }}
+                  >
+                    …
+                  </div>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: "var(--radius-sm)",
+                      border: `1px solid ${page === p ? "var(--brand-300)" : "var(--border-base)"}`,
+                      background:
+                        page === p ? "var(--brand-50)" : "var(--bg-card)",
+                      color:
+                        page === p
+                          ? "var(--brand-600)"
+                          : "var(--text-secondary)",
+                      fontSize: 12.5,
+                      fontWeight: page === p ? 600 : 400,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {p}
+                  </button>
+                ),
+              )}
+              <button
+                onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
+                disabled={page === data.totalPages}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--border-base)",
+                  background: "var(--bg-card)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: page === data.totalPages ? "not-allowed" : "pointer",
+                  opacity: page === data.totalPages ? 0.4 : 1,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         <div id="print-area" ref={printRef}>
           {/* Print header */}
@@ -1107,93 +1208,6 @@ export default function OtLogsPage() {
               ))}
           </motion.div>
         </div>
-
-        {/* Pagination */}
-        {data && data.totalPages > 1 && (
-          <div
-            className="no-print"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "12px 16px",
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-base)",
-              borderRadius: "var(--radius-md)",
-            }}
-          >
-            <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-              Showing {(page - 1) * 50 + 1}–{Math.min(page * 50, data.total)} of{" "}
-              {data.total} entries
-            </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-base)",
-                  background: "var(--bg-card)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: page === 1 ? "not-allowed" : "pointer",
-                  opacity: page === 1 ? 0.4 : 1,
-                  color: "var(--text-secondary)",
-                }}
-              >
-                <ChevronLeft size={14} />
-              </button>
-              {Array.from({ length: Math.min(data.totalPages, 7) }, (_, i) => {
-                const p = i + 1;
-                return (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: "var(--radius-sm)",
-                      border: `1px solid ${page === p ? "var(--brand-300)" : "var(--border-base)"}`,
-                      background:
-                        page === p ? "var(--brand-50)" : "var(--bg-card)",
-                      color:
-                        page === p
-                          ? "var(--brand-600)"
-                          : "var(--text-secondary)",
-                      fontSize: 12.5,
-                      fontWeight: page === p ? 600 : 400,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
-                disabled={page === data.totalPages}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-base)",
-                  background: "var(--bg-card)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: page === data.totalPages ? "not-allowed" : "pointer",
-                  opacity: page === data.totalPages ? 0.4 : 1,
-                  color: "var(--text-secondary)",
-                }}
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Logo Settings Modal */}
