@@ -1,12 +1,14 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { LogOut, User } from "lucide-react";
+import { User } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SessionCountdown } from "@/components/layout/SessionCountdown";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { TimePill } from "../ui/time-pill";
+import { AnimateIcon } from "../animate-ui/icons/icon";
+import { LogOutIcon } from "../animate-ui/icons/log-out";
 
 interface TopbarProps {
   user: {
@@ -19,27 +21,30 @@ interface TopbarProps {
 
 export function Topbar({ user }: TopbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [signOutHovered, setSignOutHovered] = useState(false);
 
   return (
     <header
       style={{
-        height: 60,
+        height: 68,
         borderBottom: "1px solid var(--border-base)",
         background: "var(--bg-card)",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 24px",
+        padding: "0 32px",
         position: "sticky",
         top: 0,
         zIndex: 30,
       }}
     >
       {/* Left — time */}
-      <TimePill />
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <TimePill />
+      </div>
 
       {/* Right */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         {/* Session countdown */}
         <SessionCountdown />
 
@@ -53,8 +58,8 @@ export function Topbar({ user }: TopbarProps) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
-              padding: "6px 10px 6px 6px",
+              gap: 10,
+              padding: "8px 14px 8px 8px",
               borderRadius: "var(--radius-md)",
               border: "1px solid var(--border-base)",
               background: "transparent",
@@ -72,8 +77,8 @@ export function Topbar({ user }: TopbarProps) {
           >
             <div
               style={{
-                width: 26,
-                height: 26,
+                width: 32,
+                height: 32,
                 borderRadius: "50%",
                 background: "var(--brand-100)",
                 display: "flex",
@@ -81,24 +86,24 @@ export function Topbar({ user }: TopbarProps) {
                 justifyContent: "center",
               }}
             >
-              <User size={13} color="var(--brand-600)" />
+              <User size={15} color="var(--brand-600)" />
             </div>
             <div style={{ textAlign: "left" }}>
               <div
                 style={{
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 600,
                   color: "var(--text-primary)",
-                  lineHeight: 1.2,
+                  lineHeight: 1.25,
                 }}
               >
                 {user.username ?? user.name ?? "User"}
               </div>
               <div
                 style={{
-                  fontSize: 10.5,
+                  fontSize: 11,
                   color: "var(--text-muted)",
-                  lineHeight: 1.2,
+                  lineHeight: 1.25,
                 }}
               >
                 {user.roleName ?? "—"}
@@ -120,44 +125,48 @@ export function Topbar({ user }: TopbarProps) {
                   transition={{ duration: 0.12 }}
                   style={{
                     position: "absolute",
-                    top: "calc(100% + 6px)",
+                    top: "calc(100% + 8px)",
                     right: 0,
-                    width: 180,
+                    width: 200,
                     background: "var(--bg-card)",
                     border: "1px solid var(--border-base)",
                     borderRadius: "var(--radius-md)",
                     boxShadow: "var(--shadow-dropdown)",
                     zIndex: 50,
                     overflow: "hidden",
-                    padding: 4,
+                    padding: 6,
                   }}
                 >
                   <button
                     onClick={() => signOut({ callbackUrl: "/login" })}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background =
+                        "var(--status-rejected-bg)";
+                      setSignOutHovered(true);
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background =
+                        "transparent";
+                      setSignOutHovered(false);
+                    }}
                     style={{
                       width: "100%",
                       display: "flex",
                       alignItems: "center",
-                      gap: 8,
-                      padding: "8px 10px",
+                      gap: 10,
+                      padding: "10px 12px",
                       borderRadius: "var(--radius-sm)",
                       border: "none",
                       background: "transparent",
                       cursor: "pointer",
-                      fontSize: 13,
+                      fontSize: 13.5,
                       color: "var(--status-rejected-text)",
                       fontWeight: 500,
                     }}
-                    onMouseEnter={(e) =>
-                      ((e.currentTarget as HTMLElement).style.background =
-                        "var(--status-rejected-bg)")
-                    }
-                    onMouseLeave={(e) =>
-                      ((e.currentTarget as HTMLElement).style.background =
-                        "transparent")
-                    }
                   >
-                    <LogOut size={13} />
+                    <AnimateIcon animate={signOutHovered}>
+                      <LogOutIcon size={14} />
+                    </AnimateIcon>
                     Sign out
                   </button>
                 </motion.div>

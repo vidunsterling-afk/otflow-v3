@@ -32,7 +32,7 @@ export default function DashboardPage() {
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       {/* Page header */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -41,7 +41,7 @@ export default function DashboardPage() {
       >
         <div
           style={{
-            fontSize: 22,
+            fontSize: 26,
             fontWeight: 700,
             color: "var(--text-primary)",
             letterSpacing: "-0.5px",
@@ -49,7 +49,7 @@ export default function DashboardPage() {
         >
           Dashboard
         </div>
-        <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
+        <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 4 }}>
           Overview of overtime activity
         </div>
       </motion.div>
@@ -58,8 +58,8 @@ export default function DashboardPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: 14,
+          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+          gap: 20,
         }}
       >
         <StatCard
@@ -120,8 +120,8 @@ export default function DashboardPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 320px",
-          gap: 16,
+          gridTemplateColumns: "1fr 340px",
+          gap: 24,
           alignItems: "start",
         }}
       >
@@ -134,7 +134,7 @@ export default function DashboardPage() {
             background: "var(--bg-card)",
             border: "1px solid var(--border-base)",
             borderRadius: "var(--radius-lg)",
-            padding: 20,
+            padding: 28,
             boxShadow: "var(--shadow-card)",
           }}
         >
@@ -146,7 +146,7 @@ export default function DashboardPage() {
               <Link
                 href="/ot-entries"
                 style={{
-                  fontSize: 12,
+                  fontSize: 12.5,
                   color: "var(--brand-500)",
                   textDecoration: "none",
                   fontWeight: 500,
@@ -157,11 +157,11 @@ export default function DashboardPage() {
             }
           />
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
             {data.recentEntries.length === 0 && (
               <div
                 style={{
-                  padding: "32px 0",
+                  padding: "48px 0",
                   textAlign: "center",
                   color: "var(--text-muted)",
                   fontSize: 13,
@@ -180,7 +180,7 @@ export default function DashboardPage() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "10px 8px",
+                  padding: "14px 12px",
                   borderRadius: "var(--radius-sm)",
                   transition: "background 0.12s",
                 }}
@@ -193,17 +193,17 @@ export default function DashboardPage() {
                     "transparent")
                 }
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div
                     style={{
-                      width: 34,
-                      height: 34,
+                      width: 40,
+                      height: 40,
                       borderRadius: "var(--radius-sm)",
                       background: "var(--bg-muted)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 11,
+                      fontSize: 11.5,
                       fontWeight: 700,
                       color: "var(--text-secondary)",
                       flexShrink: 0,
@@ -214,14 +214,14 @@ export default function DashboardPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: 13,
+                        fontSize: 13.5,
                         fontWeight: 600,
                         color: "var(--text-primary)",
                       }}
                     >
                       {entry.employee.name}
                     </div>
-                    <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
                       {formatDate(entry.workDate)} · {entry.shift}
                     </div>
                   </div>
@@ -230,13 +230,13 @@ export default function DashboardPage() {
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 10,
+                    gap: 14,
                     flexShrink: 0,
                   }}
                 >
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: 12.5,
                       color: "var(--text-secondary)",
                       fontWeight: 500,
                     }}
@@ -255,7 +255,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Right column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {/* This week pending by day */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -265,7 +265,7 @@ export default function DashboardPage() {
               background: "var(--bg-card)",
               border: "1px solid var(--border-base)",
               borderRadius: "var(--radius-lg)",
-              padding: 20,
+              padding: 24,
               boxShadow: "var(--shadow-card)",
             }}
           >
@@ -275,7 +275,7 @@ export default function DashboardPage() {
               icon={TrendingUp}
             />
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
               {DAYS.map((day, i) => {
                 const dateStr = getWeekDateStr(data.weekStart, i);
                 const entry = data.pendingByDay.find(
@@ -294,13 +294,13 @@ export default function DashboardPage() {
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 8,
+                      gap: 10,
                     }}
                   >
                     <div
                       style={{
-                        width: 28,
-                        fontSize: 11.5,
+                        width: 30,
+                        fontSize: 12,
                         fontWeight: 500,
                         color: "var(--text-muted)",
                         flexShrink: 0,
@@ -311,7 +311,7 @@ export default function DashboardPage() {
                     <div
                       style={{
                         flex: 1,
-                        height: 6,
+                        height: 7,
                         background: "var(--bg-muted)",
                         borderRadius: 99,
                         overflow: "hidden",
@@ -331,8 +331,8 @@ export default function DashboardPage() {
                     </div>
                     <div
                       style={{
-                        width: 16,
-                        fontSize: 11.5,
+                        width: 18,
+                        fontSize: 12,
                         fontWeight: 600,
                         color:
                           count > 0
@@ -359,12 +359,12 @@ export default function DashboardPage() {
               background: "var(--bg-card)",
               border: "1px solid var(--border-base)",
               borderRadius: "var(--radius-lg)",
-              padding: 20,
+              padding: 24,
               boxShadow: "var(--shadow-card)",
             }}
           >
             <SectionHeader title="Quick Stats" icon={Timer} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
               {[
                 { label: "Entries this week", value: data.weekEntries },
                 { label: "Entries today", value: data.todayEntries },
@@ -386,18 +386,18 @@ export default function DashboardPage() {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    padding: "8px 0",
+                    padding: "10px 0",
                     borderBottom: "1px solid var(--border-base)",
                   }}
                 >
                   <span
-                    style={{ fontSize: 12.5, color: "var(--text-secondary)" }}
+                    style={{ fontSize: 13, color: "var(--text-secondary)" }}
                   >
                     {label}
                   </span>
                   <span
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: 600,
                       color: "var(--text-primary)",
                     }}
@@ -422,38 +422,38 @@ function getWeekDateStr(weekStart: string, dayOffset: number): string {
 
 function DashboardSkeleton() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       <div>
         <div
           style={{
-            width: 140,
-            height: 24,
+            width: 160,
+            height: 26,
             borderRadius: "var(--radius-sm)",
             background: "var(--bg-muted)",
           }}
         />
         <div
           style={{
-            width: 200,
-            height: 14,
+            width: 220,
+            height: 15,
             borderRadius: "var(--radius-sm)",
             background: "var(--bg-muted)",
-            marginTop: 6,
+            marginTop: 8,
           }}
         />
       </div>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: 14,
+          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+          gap: 20,
         }}
       >
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
             style={{
-              height: 90,
+              height: 100,
               borderRadius: "var(--radius-lg)",
               background: "var(--bg-muted)",
               animation: "pulse 1.5s infinite",

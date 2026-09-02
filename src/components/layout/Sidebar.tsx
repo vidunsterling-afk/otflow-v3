@@ -18,7 +18,7 @@ import {
   ChevronDown,
   Database,
   ScanLine,
-  Zap,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -462,16 +462,16 @@ export function Sidebar({ permissions }: { permissions: string[] }) {
           }}
         >
           {isLoading ? (
-            <Clock size={18} color="white" />
-          ) : logo ? (
-            <img
-              src={logo}
-              alt={companyName}
-              style={{ height: 28, maxWidth: 34, objectFit: "contain" }}
-            />
-          ) : (
-            <Zap size={16} color="white" fill="white" />
-          )}
+              <Loader2 size={18} color="white" className="animate-spin" />
+            ) : logo ? (
+              <img
+                src={logo}
+                alt={companyName}
+                style={{ height: 28, maxWidth: 34, objectFit: "contain" }}
+              />
+            ) : (
+              <Clock size={18} color="white" fill="white" />
+            )}
         </div>
         <div>
           <div

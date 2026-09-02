@@ -5,7 +5,7 @@ import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, Eye, EyeOff, Loader2, CheckCircle2, Zap } from "lucide-react";
+import { Clock, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 
@@ -103,7 +103,7 @@ function LoginPageInner() {
             }}
           >
             {isLoading ? (
-              <Clock size={18} color="white" />
+              <Loader2 size={18} color="white" className="animate-spin" />
             ) : logo ? (
               <img
                 src={logo}
@@ -111,7 +111,7 @@ function LoginPageInner() {
                 style={{ height: 28, maxWidth: 34, objectFit: "contain" }}
               />
             ) : (
-              <Zap size={16} color="white" fill="white" />
+              <Clock size={18} color="white" fill="white" />
             )}
           </div>
           <div>
