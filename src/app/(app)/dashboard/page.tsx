@@ -37,21 +37,31 @@ export default function DashboardPage() {
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
       >
-        <div
+        <h1
           style={{
-            fontSize: 26,
-            fontWeight: 700,
+            fontSize: 24,
+            fontWeight: 600,
             color: "var(--text-primary)",
-            letterSpacing: "-0.5px",
+            letterSpacing: "-0.3px",
+            lineHeight: 1.3,
+            margin: 0,
           }}
         >
           Dashboard
-        </div>
-        <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 4 }}>
-          Overview of overtime activity
-        </div>
+        </h1>
+        <p
+          style={{
+            fontSize: 13.5,
+            fontWeight: 400,
+            color: "var(--text-muted)",
+            marginTop: 4,
+            lineHeight: 1.4,
+          }}
+        >
+          Track and manage overtime activity across your team
+        </p>
       </motion.div>
 
       {/* Stat cards */}
@@ -157,7 +167,14 @@ export default function DashboardPage() {
             }
           />
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              marginTop: 8,
+            }}
+          >
             {data.recentEntries.length === 0 && (
               <div
                 style={{
@@ -221,7 +238,13 @@ export default function DashboardPage() {
                     >
                       {entry.employee.name}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--text-muted)",
+                        marginTop: 2,
+                      }}
+                    >
                       {formatDate(entry.workDate)} · {entry.shift}
                     </div>
                   </div>
@@ -275,7 +298,14 @@ export default function DashboardPage() {
               icon={TrendingUp}
             />
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                marginTop: 8,
+              }}
+            >
               {DAYS.map((day, i) => {
                 const dateStr = getWeekDateStr(data.weekStart, i);
                 const entry = data.pendingByDay.find(
@@ -364,7 +394,14 @@ export default function DashboardPage() {
             }}
           >
             <SectionHeader title="Quick Stats" icon={Timer} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 14,
+                marginTop: 8,
+              }}
+            >
               {[
                 { label: "Entries this week", value: data.weekEntries },
                 { label: "Entries today", value: data.todayEntries },

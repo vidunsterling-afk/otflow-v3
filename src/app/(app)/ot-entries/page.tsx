@@ -4,7 +4,7 @@
 
 import { useState, useCallback, useReducer } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -66,6 +66,39 @@ interface DaySummary {
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+const EASE = [0.22, 1, 0.36, 1] as const; // consistent "easeOutExpo"-ish curve used throughout
+
+// ─── Animation variants ────────────────────────────────────────────
+
+const weekGridVariants: Variants = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.035 },
+  },
+};
+
+const dayCardVariants: Variants = {
+  hidden: { opacity: 0, y: 10, scale: 0.98 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.28, ease: EASE },
+  },
+};
+
+const entryListVariants: Variants = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.03 },
+  },
+};
+
+const entryRowVariants: Variants = {
+  hidden: { opacity: 0, x: -6 },
+  show: { opacity: 1, x: 0, transition: { duration: 0.22, ease: EASE } },
+};
+
 // ─── Selection reducer (O(1) add/remove/has via Set) ──────────────
 
 type SelectionAction =
@@ -112,7 +145,6 @@ export default function OtEntriesPage() {
   const [rejectEntry, setRejectEntry] = useState<OtEntry | null>(null);
   const [editEntry, setEditEntry] = useState<OtEntry | null>(null);
 
-  // Bulk action state
   const [selectedIds, dispatchSelection] = useReducer(
     selectionReducer,
     new Set<string>(),
@@ -150,7 +182,7 @@ export default function OtEntriesPage() {
   const { data: empCountData } = useQuery<{ count: number }>({
     queryKey: ["employee-count"],
     queryFn: () => fetch("/api/employees/count").then((r) => r.json()),
-    staleTime: 5 * 60 * 1000, // 5 min
+    staleTime: 5 * 60 * 1000,
   });
   const totalEmployees = empCountData?.count ?? 0;
 
@@ -161,12 +193,18 @@ export default function OtEntriesPage() {
   }, [queryClient, weekStart, selectedDate]);
 
   function getDayCounts(date: string) {
-    const rows = weekSummary.filter((r) => r.workDate === date);
-    const pending = rows.find((r) => r.status === "PENDING")?._count._all ?? 0;
+    const rows = weekSummary.filter(
+      (r: { workDate: string }) => r.workDate === date,
+    );
+    const pending =
+      rows.find((r: { status: string }) => r.status === "PENDING")?._count
+        ._all ?? 0;
     const approved =
-      rows.find((r) => r.status === "APPROVED")?._count._all ?? 0;
+      rows.find((r: { status: string }) => r.status === "APPROVED")?._count
+        ._all ?? 0;
     const rejected =
-      rows.find((r) => r.status === "REJECTED")?._count._all ?? 0;
+      rows.find((r: { status: string }) => r.status === "REJECTED")?._count
+        ._all ?? 0;
     return {
       pending,
       approved,
@@ -187,14 +225,11 @@ export default function OtEntriesPage() {
     }
   }
 
-  // Bulk approve success: optimistically remove approved IDs from selection
-  // and invalidate queries so the list refreshes
   function handleBulkSuccess(succeededIds: string[]) {
     dispatchSelection({ type: "REMOVE_IDS", ids: succeededIds });
     refresh();
   }
 
-  // Pending entries visible in current day view — only these can be bulk-actioned
   const pendingEntries = dayEntries.filter((e) => e.status === "PENDING");
   const pendingIds = pendingEntries.map((e) => e.id);
   const allPendingSelected =
@@ -218,44 +253,64 @@ export default function OtEntriesPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <div>
-          <div
+          <h1
             style={{
               fontSize: 22,
-              fontWeight: 700,
+              fontWeight: 600,
               color: "var(--text-primary)",
-              letterSpacing: "-0.5px",
+              letterSpacing: "-0.3px",
+              lineHeight: 1.3,
+              margin: 0,
             }}
           >
             OT Entries
-          </div>
-          <div
-            style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}
+          </h1>
+          <p
+            style={{
+              fontSize: 12.5,
+              fontWeight: 400,
+              color: "var(--text-muted)",
+              marginTop: 3,
+              lineHeight: 1.4,
+            }}
           >
-            {weekStart} → {weekEnd}
-          </div>
+            {formatDate(weekStart)} – {formatDate(weekEnd)}
+          </p>
         </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {weekOffset !== 0 && (
-            <button
-              onClick={() => setWeekOffset(0)}
-              style={{
-                padding: "0 12px",
-                height: 34,
-                border: "1px solid var(--border-base)",
-                borderRadius: "var(--radius-md)",
-                background: "var(--bg-card)",
-                fontSize: 12.5,
-                fontWeight: 500,
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-              }}
-            >
-              Today
-            </button>
-          )}
+          <AnimatePresence>
+            {weekOffset !== 0 && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9, width: 0 }}
+                animate={{ opacity: 1, scale: 1, width: "auto" }}
+                exit={{ opacity: 0, scale: 0.9, width: 0 }}
+                transition={{ duration: 0.18, ease: EASE }}
+                onClick={() => setWeekOffset(0)}
+                style={{
+                  padding: "0 12px",
+                  height: 34,
+                  border: "1px solid var(--border-base)",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--bg-card)",
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                  overflow: "hidden",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Today
+              </motion.button>
+            )}
+          </AnimatePresence>
+
           {/* Week nav */}
           <div
             style={{
@@ -266,12 +321,21 @@ export default function OtEntriesPage() {
             }}
           >
             {[
-              { icon: ChevronLeft, action: () => setWeekOffset((p) => p - 1) },
-              { icon: ChevronRight, action: () => setWeekOffset((p) => p + 1) },
-            ].map(({ icon: Icon, action }, i) => (
+              {
+                icon: ChevronLeft,
+                action: () => setWeekOffset((p) => p - 1),
+                label: "Previous week",
+              },
+              {
+                icon: ChevronRight,
+                action: () => setWeekOffset((p) => p + 1),
+                label: "Next week",
+              },
+            ].map(({ icon: Icon, action, label }, i) => (
               <button
                 key={i}
                 onClick={action}
+                title={label}
                 style={{
                   width: 34,
                   height: 34,
@@ -284,7 +348,7 @@ export default function OtEntriesPage() {
                   color: "var(--text-secondary)",
                   borderRight:
                     i === 0 ? "1px solid var(--border-base)" : "none",
-                  transition: "background 0.12s",
+                  transition: "background 0.15s ease",
                 }}
                 onMouseEnter={(e) =>
                   ((e.currentTarget as HTMLElement).style.background =
@@ -299,8 +363,10 @@ export default function OtEntriesPage() {
               </button>
             ))}
           </div>
+
           {canEdit && (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.96 }}
               onClick={() => setAddOpen(true)}
               style={{
                 display: "flex",
@@ -320,7 +386,7 @@ export default function OtEntriesPage() {
             >
               <Plus size={14} />
               Add Entry
-            </button>
+            </motion.button>
           )}
         </div>
       </div>
@@ -329,10 +395,10 @@ export default function OtEntriesPage() {
       <AnimatePresence mode="wait">
         <motion.div
           key={weekStart}
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -16 }}
-          transition={{ duration: 0.25 }}
+          variants={weekGridVariants}
+          initial="hidden"
+          animate="show"
+          exit={{ opacity: 0, transition: { duration: 0.15 } }}
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(7, 1fr)",
@@ -347,26 +413,15 @@ export default function OtEntriesPage() {
             return (
               <motion.button
                 key={date}
-                initial={{
-                  opacity: 0,
-                  y: 8,
-                  scale: 0.98,
-                }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                  scale: 1,
-                }}
-                transition={{
-                  duration: 0.2,
-                  delay: i * 0.03,
-                  ease: "easeOut",
-                }}
+                variants={dayCardVariants}
                 onClick={() => {
                   setSelectedDate(isSelected ? null : date);
                   dispatchSelection({ type: "CLEAR" });
                 }}
-                whileHover={{ y: -2 }}
+                whileHover={{
+                  y: -2,
+                  transition: { duration: 0.15, ease: EASE },
+                }}
                 whileTap={{ scale: 0.97 }}
                 style={{
                   border: `1px solid ${
@@ -381,7 +436,7 @@ export default function OtEntriesPage() {
                     ? "0 0 0 2px var(--brand-200)"
                     : "var(--shadow-card)",
                   transition:
-                    "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+                    "border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease",
                 }}
               >
                 <div
@@ -403,7 +458,7 @@ export default function OtEntriesPage() {
                   style={{
                     fontSize: 18,
                     fontWeight: 700,
-                    letterSpacing: "-0.5px",
+                    letterSpacing: "-0.4px",
                     color: isToday ? "var(--brand-500)" : "var(--text-primary)",
                     marginBottom: 2,
                   }}
@@ -412,7 +467,8 @@ export default function OtEntriesPage() {
                 </div>
 
                 {isToday && (
-                  <div
+                  <motion.div
+                    layoutId="today-dot"
                     style={{
                       width: 4,
                       height: 4,
@@ -427,40 +483,36 @@ export default function OtEntriesPage() {
                   {weekFetching ? (
                     <motion.div
                       key="loading"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.18 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
                       style={{
-                        fontSize: 10,
-                        color: "var(--text-muted)",
                         marginTop: 6,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        color: "var(--text-muted)",
                       }}
                     >
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{
-                          duration: 1.2,
+                          duration: 1,
                           repeat: Infinity,
                           ease: "linear",
                         }}
                       >
-                        <RefreshCcw size={14} strokeWidth={2.5} />
+                        <RefreshCcw size={13} strokeWidth={2.5} />
                       </motion.div>
                     </motion.div>
                   ) : counts.total > 0 ? (
                     <motion.div
                       key="counts"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{
-                        duration: 0.22,
-                        ease: "easeOut",
-                      }}
+                      variants={entryListVariants}
+                      initial="hidden"
+                      animate="show"
+                      exit={{ opacity: 0, transition: { duration: 0.12 } }}
                       style={{
                         display: "flex",
                         flexDirection: "column",
@@ -468,67 +520,52 @@ export default function OtEntriesPage() {
                         marginTop: 6,
                       }}
                     >
-                      {counts.pending > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: 0.03 }}
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 600,
-                            color: "var(--status-pending-text)",
-                            background: "var(--status-pending-bg)",
-                            borderRadius: 99,
-                            padding: "1px 6px",
-                          }}
-                        >
-                          {counts.pending} pending
-                        </motion.div>
-                      )}
-
-                      {counts.approved > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: 0.06 }}
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 600,
-                            color: "var(--status-approved-text)",
-                            background: "var(--status-approved-bg)",
-                            borderRadius: 99,
-                            padding: "1px 6px",
-                          }}
-                        >
-                          {counts.approved} approved
-                        </motion.div>
-                      )}
-
-                      {counts.rejected > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: 0.09 }}
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 600,
-                            color: "var(--status-rejected-text)",
-                            background: "var(--status-rejected-bg)",
-                            borderRadius: 99,
-                            padding: "1px 6px",
-                          }}
-                        >
-                          {counts.rejected} rejected
-                        </motion.div>
+                      {[
+                        {
+                          count: counts.pending,
+                          label: "pending",
+                          text: "var(--status-pending-text)",
+                          bg: "var(--status-pending-bg)",
+                        },
+                        {
+                          count: counts.approved,
+                          label: "approved",
+                          text: "var(--status-approved-text)",
+                          bg: "var(--status-approved-bg)",
+                        },
+                        {
+                          count: counts.rejected,
+                          label: "rejected",
+                          text: "var(--status-rejected-text)",
+                          bg: "var(--status-rejected-bg)",
+                        },
+                      ].map(
+                        ({ count, label, text, bg }) =>
+                          count > 0 && (
+                            <motion.div
+                              key={label}
+                              variants={entryRowVariants}
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: text,
+                                background: bg,
+                                borderRadius: 999,
+                                padding: "1px 6px",
+                              }}
+                            >
+                              {count} {label}
+                            </motion.div>
+                          ),
                       )}
                     </motion.div>
                   ) : (
                     <motion.div
                       key="empty"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.18 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
                       style={{
                         fontSize: 10,
                         color: "var(--text-muted)",
@@ -550,10 +587,10 @@ export default function OtEntriesPage() {
         {selectedDate && (
           <motion.div
             key={selectedDate}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, y: 8, transition: { duration: 0.15 } }}
+            transition={{ duration: 0.22, ease: EASE }}
             style={{
               background: "var(--bg-card)",
               border: "1px solid var(--border-base)",
@@ -590,14 +627,14 @@ export default function OtEntriesPage() {
               }
             />
 
-            {/* ── Incomplete coverage badge ── */}
+            {/* Incomplete coverage badge */}
             <AnimatePresence>
               {isDayIncomplete && !dayLoading && (
                 <motion.div
                   initial={{ opacity: 0, y: -6, height: 0 }}
                   animate={{ opacity: 1, y: 0, height: "auto" }}
                   exit={{ opacity: 0, y: -6, height: 0 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.2, ease: EASE }}
                   style={{ overflow: "hidden", marginBottom: 14 }}
                 >
                   <div
@@ -641,14 +678,14 @@ export default function OtEntriesPage() {
               )}
             </AnimatePresence>
 
-            {/* Bulk action toolbar — slides in when entries are selected */}
+            {/* Bulk action toolbar */}
             <AnimatePresence>
               {showBulkToolbar && (
                 <motion.div
                   initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                   animate={{ opacity: 1, height: "auto", marginBottom: 12 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0.18, ease: EASE }}
                   style={{ overflow: "hidden" }}
                 >
                   <div
@@ -689,7 +726,8 @@ export default function OtEntriesPage() {
                       >
                         Clear
                       </button>
-                      <button
+                      <motion.button
+                        whileTap={{ scale: 0.96 }}
                         onClick={() => setBulkAction("reject")}
                         style={{
                           display: "flex",
@@ -708,8 +746,9 @@ export default function OtEntriesPage() {
                       >
                         <XCircle size={12} />
                         Reject {selectedCount}
-                      </button>
-                      <button
+                      </motion.button>
+                      <motion.button
+                        whileTap={{ scale: 0.96 }}
                         onClick={() => setBulkAction("approve")}
                         style={{
                           display: "flex",
@@ -728,7 +767,7 @@ export default function OtEntriesPage() {
                       >
                         <CheckCircle2 size={12} />
                         Approve {selectedCount}
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
                 </motion.div>
@@ -749,7 +788,10 @@ export default function OtEntriesPage() {
             )}
 
             {!dayLoading && dayEntries.length === 0 && (
-              <div
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
                 style={{
                   padding: "32px 0",
                   textAlign: "center",
@@ -758,12 +800,16 @@ export default function OtEntriesPage() {
                 }}
               >
                 No OT entries for this day
-              </div>
+              </motion.div>
             )}
 
             {!dayLoading && dayEntries.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {/* Select-all row — only shown when there are pending entries and user can approve */}
+              <motion.div
+                variants={entryListVariants}
+                initial="hidden"
+                animate="show"
+                style={{ display: "flex", flexDirection: "column", gap: 8 }}
+              >
                 {canApprove && pendingEntries.length > 1 && (
                   <div
                     style={{
@@ -808,16 +854,20 @@ export default function OtEntriesPage() {
                   </div>
                 )}
 
-                {dayEntries.map((entry, i) => {
+                {dayEntries.map((entry) => {
                   const isPending = entry.status === "PENDING";
                   const isSelected = selectedIds.has(entry.id);
 
                   return (
                     <motion.div
                       key={entry.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.04 }}
+                      layout
+                      variants={entryRowVariants}
+                      exit={{
+                        opacity: 0,
+                        x: -6,
+                        transition: { duration: 0.15 },
+                      }}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -829,10 +879,10 @@ export default function OtEntriesPage() {
                           ? "var(--brand-50)"
                           : "var(--bg-base)",
                         gap: 12,
-                        transition: "border-color 0.1s, background 0.1s",
+                        transition:
+                          "border-color 0.15s ease, background 0.15s ease",
                       }}
                     >
-                      {/* Checkbox — only for pending + approver */}
                       {canApprove && isPending && (
                         <button
                           onClick={() =>
@@ -858,7 +908,6 @@ export default function OtEntriesPage() {
                         </button>
                       )}
 
-                      {/* Left — employee info */}
                       <div
                         style={{
                           display: "flex",
@@ -930,7 +979,6 @@ export default function OtEntriesPage() {
                         </div>
                       </div>
 
-                      {/* Middle — OT breakdown */}
                       <div
                         style={{
                           display: "flex",
@@ -988,7 +1036,6 @@ export default function OtEntriesPage() {
                               >
                                 {label}
                               </span>
-
                               <div
                                 style={{
                                   width: 1,
@@ -996,7 +1043,6 @@ export default function OtEntriesPage() {
                                   background: border,
                                 }}
                               />
-
                               <span
                                 style={{
                                   fontSize: 12,
@@ -1011,7 +1057,6 @@ export default function OtEntriesPage() {
                         )}
                       </div>
 
-                      {/* Right — status + actions */}
                       <div
                         style={{
                           display: "flex",
@@ -1075,7 +1120,7 @@ export default function OtEntriesPage() {
                     </motion.div>
                   );
                 })}
-              </div>
+              </motion.div>
             )}
           </motion.div>
         )}
@@ -1146,7 +1191,7 @@ function ActionBtn({
         justifyContent: "center",
         cursor: "pointer",
         color,
-        transition: "background 0.12s, border-color 0.12s",
+        transition: "background 0.15s ease, border-color 0.15s ease",
         touchAction: "manipulation",
       }}
       onMouseEnter={(e) => {
