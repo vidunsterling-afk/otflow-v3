@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Search,
   X,
+  ScrollText,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -30,6 +31,7 @@ import { LogoSettings } from "@/components/ot/LogoSettings";
 import { Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { Status } from "@/lib/types";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 const RANGES = [
   { value: "day", label: "Daily" },
@@ -212,25 +214,15 @@ export default function OtLogsPage() {
             justifyContent: "space-between",
           }}
         >
-          <div>
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: "var(--text-primary)",
-                letterSpacing: "-0.5px",
-              }}
-            >
-              OT Logs
-            </div>
-            <div
-              style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}
-            >
-              {data
+          <AdminPageHeader
+            title="OT Logs"
+            sub={
+              data
                 ? `${data.dateFrom} → ${data.dateTo} · ${data.total} entries`
-                : "Loading..."}
-            </div>
-          </div>
+                : "Loading..."
+            }
+            icon={ScrollText}
+          />
           <div className="no-print" style={{ display: "flex", gap: 8 }}>
             <button
               onClick={() => setLogoOpen(true)}

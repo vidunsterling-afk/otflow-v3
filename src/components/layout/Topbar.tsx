@@ -1,11 +1,11 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { User } from "lucide-react";
-import { useState } from "react";
+import { UserIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SessionCountdown } from "@/components/layout/SessionCountdown";
-import { NotificationBell } from "@/components/layout/NotificationBell";
+// import { NotificationBell } from "@/components/layout/NotificationBell";
 import { TimePill } from "../ui/time-pill";
 import { AnimateIcon } from "../animate-ui/icons/icon";
 import { LogOutIcon } from "../animate-ui/icons/log-out";
@@ -19,9 +19,50 @@ interface TopbarProps {
   };
 }
 
+// Single easing curve used everywhere so nothing feels out of sync
+const EASE = [0.22, 1, 0.36, 1] as const; // easeOutExpo-ish — smooth, no overshoot
+const LAYOUT_TRANSITION = { duration: 0.28, ease: EASE };
+const CONTENT_TRANSITION = { duration: 0.16, ease: EASE };
+
 export function Topbar({ user }: TopbarProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [signOutHovered, setSignOutHovered] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearResetTimer = () => {
+    if (resetTimer.current) {
+      clearTimeout(resetTimer.current);
+      resetTimer.current = null;
+    }
+  };
+
+  const armResetTimer = () => {
+    clearResetTimer();
+    resetTimer.current = setTimeout(() => setConfirming(false), 3000);
+  };
+
+  useEffect(() => {
+    if (!confirming) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest("[data-signout-trigger]")) {
+        setConfirming(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [confirming]);
+
+  useEffect(() => clearResetTimer, []);
+
+  const handleClick = () => {
+    if (!confirming) {
+      setConfirming(true);
+      armResetTimer();
+      return;
+    }
+    clearResetTimer();
+    signOut({ callbackUrl: "/login" });
+  };
 
   return (
     <header
@@ -45,135 +86,155 @@ export function Topbar({ user }: TopbarProps) {
 
       {/* Right */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        {/* Session countdown */}
         <SessionCountdown />
+        {/* <NotificationBell /> */}
 
-        {/* Notification Bell */}
-        <NotificationBell />
-
-        {/* User menu */}
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setMenuOpen((p) => !p)}
+        {/* User menu — morphs in place, height is fixed so the topbar never shifts */}
+        <motion.button
+          layout="preserve-aspect"
+          data-signout-trigger
+          onClick={handleClick}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          animate={{
+            backgroundColor: confirming
+              ? "var(--status-rejected-bg)"
+              : hovered
+                ? "var(--bg-muted)"
+                : "rgba(0,0,0,0)",
+            borderColor: confirming
+              ? "var(--status-rejected-text)"
+              : "var(--border-base)",
+          }}
+          transition={{
+            layout: LAYOUT_TRANSITION,
+            backgroundColor: CONTENT_TRANSITION,
+            borderColor: CONTENT_TRANSITION,
+          }}
+          style={{
+            height: 48,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "0 14px 0 8px",
+            borderRadius: "var(--radius-md)",
+            borderWidth: 1,
+            borderStyle: "solid",
+            cursor: "pointer",
+            overflow: "hidden",
+          }}
+        >
+          {/* Avatar — fixed size, only the icon inside crossfades */}
+          <div
             style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              flexShrink: 0,
+              background: confirming
+                ? "var(--status-rejected-bg)"
+                : "var(--brand-100)",
               display: "flex",
               alignItems: "center",
-              gap: 10,
-              padding: "8px 14px 8px 8px",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--border-base)",
-              background: "transparent",
-              cursor: "pointer",
-              transition: "background 0.15s",
+              justifyContent: "center",
+              position: "relative",
             }}
-            onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLElement).style.background =
-                "var(--bg-muted)")
-            }
-            onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLElement).style.background =
-                "transparent")
-            }
           >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: "50%",
-                background: "var(--brand-100)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <User size={15} color="var(--brand-600)" />
-            </div>
-            <div style={{ textAlign: "left" }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                  lineHeight: 1.25,
-                }}
-              >
-                {user.username ?? user.name ?? "User"}
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--text-muted)",
-                  lineHeight: 1.25,
-                }}
-              >
-                {user.roleName ?? "—"}
-              </div>
-            </div>
-          </button>
-
-          <AnimatePresence>
-            {menuOpen && (
-              <>
-                <div
-                  style={{ position: "fixed", inset: 0, zIndex: 49 }}
-                  onClick={() => setMenuOpen(false)}
-                />
-                <motion.div
-                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
-                  transition={{ duration: 0.12 }}
-                  style={{
-                    position: "absolute",
-                    top: "calc(100% + 8px)",
-                    right: 0,
-                    width: 200,
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border-base)",
-                    borderRadius: "var(--radius-md)",
-                    boxShadow: "var(--shadow-dropdown)",
-                    zIndex: 50,
-                    overflow: "hidden",
-                    padding: 6,
-                  }}
+            <AnimatePresence mode="popLayout" initial={false}>
+              {confirming ? (
+                <motion.span
+                  key="logout-icon"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={CONTENT_TRANSITION}
+                  style={{ display: "flex" }}
                 >
-                  <button
-                    onClick={() => signOut({ callbackUrl: "/login" })}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background =
-                        "var(--status-rejected-bg)";
-                      setSignOutHovered(true);
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background =
-                        "transparent";
-                      setSignOutHovered(false);
-                    }}
+                  <AnimateIcon animate={hovered}>
+                    <LogOutIcon size={15} color="var(--status-rejected-text)" />
+                  </AnimateIcon>
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="user-icon"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={CONTENT_TRANSITION}
+                  style={{ display: "flex" }}
+                >
+                  <UserIcon size={15} color="var(--brand-600)" />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Text block — fixed line-height/font-size in both states, so no height jump */}
+          <div style={{ textAlign: "left", position: "relative" }}>
+            <AnimatePresence mode="popLayout" initial={false}>
+              {confirming ? (
+                <motion.div
+                  key="confirm-text"
+                  initial={{ opacity: 0, x: 6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  transition={CONTENT_TRANSITION}
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  <div
                     style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "10px 12px",
-                      borderRadius: "var(--radius-sm)",
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      fontSize: 13.5,
+                      fontSize: 13,
+                      fontWeight: 600,
                       color: "var(--status-rejected-text)",
-                      fontWeight: 500,
+                      lineHeight: 1.25,
                     }}
                   >
-                    <AnimateIcon animate={signOutHovered}>
-                      <LogOutIcon size={14} />
-                    </AnimateIcon>
-                    Sign out
-                  </button>
+                    Click to sign out
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--status-rejected-text)",
+                      opacity: 0.75,
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    Tap again to confirm
+                  </div>
                 </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
+              ) : (
+                <motion.div
+                  key="user-text"
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 6 }}
+                  transition={CONTENT_TRANSITION}
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--text-primary)",
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    {user.username ?? user.name ?? "User"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-muted)",
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    {user.roleName ?? "—"}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.button>
       </div>
     </header>
   );

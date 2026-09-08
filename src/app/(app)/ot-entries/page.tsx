@@ -40,6 +40,7 @@ import { RefreshCcw } from "@deemlol/next-icons";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { Status } from "@/lib/types";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 interface OtEntry {
   id: string;
@@ -245,6 +246,10 @@ export default function OtEntriesPage() {
 
   const today = new Date().toISOString().split("T")[0];
 
+  // Custom Header
+  const headerWeekStartDate = formatDate(weekStart);
+  const headerWeekEndDate = formatDate(weekEnd);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
@@ -257,31 +262,11 @@ export default function OtEntriesPage() {
           gap: 12,
         }}
       >
-        <div>
-          <h1
-            style={{
-              fontSize: 22,
-              fontWeight: 600,
-              color: "var(--text-primary)",
-              letterSpacing: "-0.3px",
-              lineHeight: 1.3,
-              margin: 0,
-            }}
-          >
-            OT Entries
-          </h1>
-          <p
-            style={{
-              fontSize: 12.5,
-              fontWeight: 400,
-              color: "var(--text-muted)",
-              marginTop: 3,
-              lineHeight: 1.4,
-            }}
-          >
-            {formatDate(weekStart)} – {formatDate(weekEnd)}
-          </p>
-        </div>
+        <AdminPageHeader
+          title="OT Entries"
+          sub={`${headerWeekStartDate} - ${headerWeekEndDate}`}
+          icon={Clock}
+        />
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <AnimatePresence>

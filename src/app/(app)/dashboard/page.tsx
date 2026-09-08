@@ -11,6 +11,7 @@ import {
   Timer,
   Activity,
   TrendingUp,
+  LayoutDashboard,
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -18,6 +19,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { formatMinutes, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { DashboardStats } from "@/lib/statsInterface";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 export default function DashboardPage() {
   const { data, isLoading } = useQuery<DashboardStats>({
@@ -34,35 +36,11 @@ export default function DashboardPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       {/* Page header */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
-      >
-        <h1
-          style={{
-            fontSize: 24,
-            fontWeight: 600,
-            color: "var(--text-primary)",
-            letterSpacing: "-0.3px",
-            lineHeight: 1.3,
-            margin: 0,
-          }}
-        >
-          Dashboard
-        </h1>
-        <p
-          style={{
-            fontSize: 13.5,
-            fontWeight: 400,
-            color: "var(--text-muted)",
-            marginTop: 4,
-            lineHeight: 1.4,
-          }}
-        >
-          Track and manage overtime activity across your team
-        </p>
-      </motion.div>
+      <AdminPageHeader
+        title="Dashboard"
+        sub="Track and manage overtime activity across your team"
+        icon={LayoutDashboard}
+      />
 
       {/* Stat cards */}
       <div

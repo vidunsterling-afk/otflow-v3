@@ -319,7 +319,7 @@ function LoginPageInner() {
           bottom: 16,
           left: "50%",
           transform: "translateX(-50%)",
-          fontSize: 11,
+          fontSize: 12,
           color: "var(--text-muted)",
           letterSpacing: "0.2px",
         }}
