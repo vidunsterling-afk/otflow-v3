@@ -44,8 +44,7 @@ src/
 │   │       ├── users/          # User management + password reset
 │   │       ├── roles/          # Role and permission builder
 │   │       ├── decision-reasons/
-│   │       ├── audit/          # Full audit trail with diff viewer
-│   │       └── migrate/        # Browser-based MongoDB migration UI
+│   │       └── audit/          # Full audit trail with diff viewer
 │   ├── change-password/        # Forced password change screen
 │   ├── login/
 │   └── api/                    # All API routes
@@ -63,8 +62,6 @@ src/
 │   └── utils.ts                # Date formatting, color helpers, week utils
 ├── hooks/
 │   └── useNotificationSound.ts # Web Audio API notification sounds
-└── scripts/
-    └── migrate.ts              # CLI migration tool (MongoDB → PostgreSQL)
 ```
 
 ---
@@ -210,40 +207,6 @@ Notifications auto-clear after 24 hours. A soft chime plays on arrival (Web Audi
 
 ---
 
-## Migrating from V2 (MongoDB)
-
-There are two ways to migrate data from the old system.
-
-### Option A — Browser UI
-
-Go to `/admin/migrate` while logged in. Connect to your MongoDB URI, preview each collection, optionally clear existing data, select what to migrate, and run. Best for smaller datasets.
-
-### Option B — CLI (recommended for large datasets)
-
-The CLI streams data using a MongoDB cursor so it never runs out of memory regardless of how many records you have.
-
-```bash
-npm run migrate
-```
-
-Or pass the URI directly to skip the prompt:
-
-```bash
-MONGO_URI="mongodb://..." npm run migrate
-```
-
-The CLI will:
-1. Connect to both MongoDB and PostgreSQL
-2. Ask you per-table whether to clear existing data first
-3. Ask you per-collection whether to migrate it
-4. Let you set the batch size for OT entries (default 25, lower = more stable)
-5. Show a live progress bar for every collection
-6. Write all errors to `migration-errors.log` so nothing is lost silently
-
-**Migration order matters** — employees must be migrated before OT entries since entries reference employee IDs. The CLI handles this automatically.
-
----
-
 ## Session management
 
 JWT sessions last 8 hours. A countdown timer appears in the topbar when 5 minutes remain. At 3 minutes a popup appears with the exact time left and a one-click **Extend Session** button that refreshes the token without signing out.
@@ -258,7 +221,6 @@ npm run build        # Production build
 npm run db:push      # Push schema changes to database
 npm run db:seed      # Seed default roles, admin user, and decision reasons
 npm run db:studio    # Open Prisma Studio (visual database browser)
-npm run migrate      # Run the MongoDB → PostgreSQL migration CLI
 ```
 
 ---

@@ -23,9 +23,9 @@ export default async function AppLayout({
         background: "var(--bg-base)",
       }}
     >
-      <Sidebar permissions={user.permissions ?? []} />
+      <Sidebar permissions={user.permissions ?? []} user={user} />
       <AppShell>
-        <Topbar user={user} />
+        <Topbar />
         <main style={{ flex: 1, padding: "24px", overflowY: "auto" }}>
           {children}
         </main>

@@ -2,7 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
@@ -14,15 +15,16 @@ import {
   UserCog,
   Settings,
   MessageSquare,
-  Database,
+  LogOut,
   ScanLine,
   Loader2,
   X,
 } from "lucide-react";
 import { PERMISSIONS } from "@/lib/permissions";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useSidebarStore } from "@/lib/sidebar-store";
+import { Modal } from "@/components/ui/Modal";
 import "./sidebar.css";
 
 const NAV_ITEMS = [
@@ -108,92 +110,6 @@ const NAV_ITEMS = [
   },
 ];
 
-const DEV_PASSWORD = "otflow-dev";
-
-function DevMigrationButton() {
-  const router = useRouter();
-  const [state, setState] = useState<"idle" | "prompt">("idle");
-  const [input, setInput] = useState("");
-  const [error, setError] = useState(false);
-
-  function handleClick() {
-    setState("prompt");
-    setInput("");
-    setError(false);
-  }
-
-  function handleSubmit() {
-    if (input === DEV_PASSWORD) {
-      setState("idle");
-      router.push("/admin/migrate");
-    } else {
-      setError(true);
-      setInput("");
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter") handleSubmit();
-    if (e.key === "Escape") {
-      setState("idle");
-      setError(false);
-    }
-  }
-
-  return (
-    <div className="sidebar-dev">
-      {state === "idle" ? (
-        <motion.button
-          className="sidebar-dev-btn"
-          onClick={handleClick}
-          whileTap={{ scale: 0.97 }}
-          transition={{ duration: 0.15 }}
-        >
-          <Database size={14} strokeWidth={1.8} />
-          Migration Tool
-        </motion.button>
-      ) : (
-        <div className="sidebar-dev-panel" data-error={error}>
-          <div className="sidebar-dev-label">Dev password</div>
-          <input
-            autoFocus
-            type="password"
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              setError(false);
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter password..."
-            className="sidebar-dev-input"
-            aria-label="Developer migration password"
-          />
-          {error && <div className="sidebar-dev-error">Incorrect password</div>}
-          <div className="sidebar-dev-actions">
-            <motion.button
-              className="sidebar-dev-submit"
-              onClick={handleSubmit}
-              whileTap={{ scale: 0.96 }}
-            >
-              Enter
-            </motion.button>
-            <motion.button
-              className="sidebar-dev-cancel"
-              onClick={() => {
-                setState("idle");
-                setError(false);
-              }}
-              whileTap={{ scale: 0.96 }}
-            >
-              Cancel
-            </motion.button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function NavGroup({
   group,
   permissions,
@@ -251,10 +167,23 @@ function NavGroup({
   );
 }
 
-export function Sidebar({ permissions }: { permissions: string[] }) {
+interface SidebarProps {
+  permissions: string[];
+  user: {
+    username?: string | null;
+    name?: string | null;
+    roleName?: string | null;
+  };
+}
+
+export function Sidebar({ permissions, user }: SidebarProps) {
   const { logo, companyName, isLoading } = useCompanySettings();
   const pathname = usePathname();
   const { mobileOpen, closeMobile } = useSidebarStore();
+  const [logoutOpen, setLogoutOpen] = useState(false);
+
+  const displayName = user.username ?? user.name ?? "User";
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   useEffect(() => {
     closeMobile();
@@ -317,7 +246,23 @@ export function Sidebar({ permissions }: { permissions: string[] }) {
           ))}
         </nav>
 
-        <DevMigrationButton />
+        {/* User profile + logout — styled like the rest of the sidebar */}
+        <div className="sidebar-user">
+          <button
+            className="sidebar-user__button"
+            onClick={() => setLogoutOpen(true)}
+            aria-label={`Signed in as ${displayName}. Sign out`}
+          >
+            <span className="sidebar-user__avatar">{initials}</span>
+            <span className="sidebar-user__info">
+              <span className="sidebar-user__name">{displayName}</span>
+              <span className="sidebar-user__role">
+                {user.roleName ?? "—"}
+              </span>
+            </span>
+            <LogOut size={15} className="sidebar-user__logout" />
+          </button>
+        </div>
 
         <div className="sidebar-footer">
           <span>OTFlow V3</span>
@@ -326,6 +271,64 @@ export function Sidebar({ permissions }: { permissions: string[] }) {
           </span>
         </div>
       </aside>
+
+      <Modal
+        open={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        title="Sign out?"
+        subtitle="You'll be returned to the login screen."
+        width={420}
+      >
+        <p
+          style={{
+            fontSize: 13,
+            lineHeight: 1.6,
+            color: "var(--text-secondary)",
+          }}
+        >
+          Are you sure you want to sign out of OTFlow? Any unsaved changes will
+          be lost.
+        </p>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+            marginTop: 24,
+          }}
+        >
+          <button
+            onClick={() => setLogoutOpen(false)}
+            style={{
+              padding: "9px 16px",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-base)",
+              background: "var(--bg-card)",
+              color: "var(--text-secondary)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            style={{
+              padding: "9px 16px",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--status-rejected-border)",
+              background: "var(--status-rejected-bg)",
+              color: "var(--status-rejected-text)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }
