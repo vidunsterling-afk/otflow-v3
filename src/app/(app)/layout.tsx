@@ -2,7 +2,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { Topbar } from "@/components/layout/Topbar";
 import { AppShell } from "@/components/layout/AppShell";
 
 export default async function AppLayout({
@@ -25,10 +24,7 @@ export default async function AppLayout({
     >
       <Sidebar permissions={user.permissions ?? []} user={user} />
       <AppShell>
-        <Topbar />
-        <main style={{ flex: 1, padding: "24px", overflowY: "auto" }}>
-          {children}
-        </main>
+        <main className="app-main">{children}</main>
       </AppShell>
     </div>
   );

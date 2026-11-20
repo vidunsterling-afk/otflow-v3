@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
-const WARN_AT_SECONDS = 5 * 60; // topbar chip appears
+const WARN_AT_SECONDS = 5 * 60; // compact chip appears
 const POPUP_AT_SECONDS = 3 * 60; // popup appears
 const CRITICAL_AT_SECONDS = 60; // everything goes red
 
@@ -92,7 +92,7 @@ const STATUS_LABELS: Record<SessionStatus, string> = {
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface SessionCountdownProps {
   /**
-   * Default (no prop): topbar chip — only appears when ≤ 5 min remaining.
+   * Default (no prop): compact chip — only appears when ≤ 5 min remaining.
    *
    * alwaysShow: full card widget — visible at all times, shows verbose label,
    *   status badge, and inline Extend button. Drop anywhere on a page.
@@ -188,8 +188,8 @@ export function SessionCountdown({
   const isCritical = status === "critical";
   const isWarning = status === "warning";
 
-  // Normal topbar mode: only show when close to expiry
-  const showTopbarChip = !alwaysShow && !pill && secondsLeft <= WARN_AT_SECONDS;
+  // Compact chip mode: only show when close to expiry
+  const showCompactChip = !alwaysShow && !pill && secondsLeft <= WARN_AT_SECONDS;
 
   // ── Pill variant ──────────────────────────────────────────────────────────
   if (pill) {
@@ -394,7 +394,7 @@ export function SessionCountdown({
   return (
     <>
       <AnimatePresence>
-        {showTopbarChip && (
+        {showCompactChip && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9, x: 10 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}

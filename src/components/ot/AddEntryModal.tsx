@@ -832,6 +832,49 @@ export function AddEntryModal({
       title={`Add OT Entries${state.rows.length > 1 ? ` (${state.rows.length})` : ""}`}
       headerContent={<SessionCountdown pill alwaysShow />}
       width={580}
+      footer={
+        <>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-base)",
+              background: "transparent",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              touchAction: "manipulation",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{
+              padding: "8px 18px",
+              borderRadius: "var(--radius-md)",
+              border: "none",
+              background: loading ? "var(--brand-300)" : "var(--brand-500)",
+              color: "white",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: loading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              touchAction: "manipulation",
+            }}
+          >
+            {loading && <Loader2 size={13} className="animate-spin" />}
+            {state.rows.length > 1
+              ? `Submit ${state.rows.length} Entries`
+              : "Add Entry"}
+          </button>
+        </>
+      }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {/* Work date — shared across all rows */}
@@ -899,55 +942,6 @@ export function AddEntryModal({
           Add another employee entry
         </button>
 
-        {/* Actions */}
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            justifyContent: "flex-end",
-            paddingTop: 4,
-          }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--border-base)",
-              background: "transparent",
-              fontSize: 13,
-              fontWeight: 500,
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              touchAction: "manipulation",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            style={{
-              padding: "8px 18px",
-              borderRadius: "var(--radius-md)",
-              border: "none",
-              background: loading ? "var(--brand-300)" : "var(--brand-500)",
-              color: "white",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: loading ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              touchAction: "manipulation",
-            }}
-          >
-            {loading && <Loader2 size={13} className="animate-spin" />}
-            {state.rows.length > 1
-              ? `Submit ${state.rows.length} Entries`
-              : "Add Entry"}
-          </button>
-        </div>
       </div>
     </Modal>
   );

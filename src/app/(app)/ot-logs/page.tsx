@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -20,18 +21,20 @@ import {
   Search,
   X,
   ScrollText,
+  Building2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { SectionHeader } from "@/components/ui/SectionHeader";
 import { formatMinutes, formatDate, getPageNumbers } from "@/lib/utils";
 import { Input, Select } from "@/components/ui/FormField";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { LogoSettings } from "@/components/ot/LogoSettings";
-import { Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { Status } from "@/lib/types";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import "./ot-logs.css";
 
 const RANGES = [
   { value: "day", label: "Daily" },
@@ -46,6 +49,34 @@ const STATUSES = [
   { value: "PENDING", label: "Pending" },
   { value: "APPROVED", label: "Approved" },
   { value: "REJECTED", label: "Rejected" },
+];
+
+type SortKey =
+  | "empId"
+  | "employee"
+  | "workDate"
+  | "shift"
+  | "normalMinutes"
+  | "doubleMinutes"
+  | "tripleMinutes"
+  | "status"
+  | "approvedTotalMinutes";
+
+interface SortState {
+  key: SortKey;
+  dir: "asc" | "desc";
+}
+
+const SORT_COLUMNS: Array<{ key: SortKey; label: string }> = [
+  { key: "empId", label: "Emp ID" },
+  { key: "employee", label: "Employee" },
+  { key: "workDate", label: "Date" },
+  { key: "shift", label: "Shift" },
+  { key: "normalMinutes", label: "Normal" },
+  { key: "doubleMinutes", label: "Double" },
+  { key: "tripleMinutes", label: "Triple" },
+  { key: "status", label: "Status" },
+  { key: "approvedTotalMinutes", label: "Approved OT" },
 ];
 
 interface Employee {
@@ -91,6 +122,57 @@ interface LogsResponse {
   statusCounts: Record<string, number>;
 }
 
+function sortValue(entry: LogEntry, key: SortKey): string | number {
+  switch (key) {
+    case "empId":
+      return entry.employee.empId;
+    case "employee":
+      return entry.employee.name.toLowerCase();
+    case "workDate":
+      return entry.workDate;
+    case "shift":
+      return entry.shift;
+    case "normalMinutes":
+      return entry.normalMinutes;
+    case "doubleMinutes":
+      return entry.doubleMinutes;
+    case "tripleMinutes":
+      return entry.tripleMinutes;
+    case "status":
+      return entry.status;
+    case "approvedTotalMinutes":
+      return entry.approvedTotalMinutes;
+  }
+}
+
+function SortHeader({
+  column,
+  sort,
+  onSort,
+}: {
+  column: (typeof SORT_COLUMNS)[number];
+  sort: SortState;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sort.key === column.key;
+  const Icon = !active
+    ? ArrowUpDown
+    : sort.dir === "asc"
+      ? ArrowUp
+      : ArrowDown;
+
+  return (
+    <button
+      className="logs-sort"
+      data-active={active}
+      onClick={() => onSort(column.key)}
+    >
+      {column.label}
+      <Icon size={11} />
+    </button>
+  );
+}
+
 export default function OtLogsPage() {
   const { data: session } = useSession();
   const permissions = (session?.user as any)?.permissions ?? [];
@@ -106,25 +188,32 @@ export default function OtLogsPage() {
   const [empResults, setEmpResults] = useState<Employee[]>([]);
   const [showEmpDrop, setShowEmpDrop] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [sort, setSort] = useState<SortState>({
+    key: "workDate",
+    dir: "desc",
+  });
   const [logoOpen, setLogoOpen] = useState(false);
   const [companyName, setCompanyName] = useState("");
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
 
-  // Load saved company name on mount
   useEffect(() => {
     fetch("/api/settings/logo")
       .then((r) => r.json())
       .then((d) => {
         if (d.companyName) setCompanyName(d.companyName);
-      });
+        if (d.logo) setCompanyLogo(d.logo);
+      })
+      .catch(() => {});
   }, []);
+
   const empSearchTimeout = useRef<NodeJS.Timeout | null>(null);
-  const printRef = useRef<HTMLDivElement>(null);
 
   const queryParams = new URLSearchParams({
     range,
     status,
     page: String(page),
-    pageSize: "50",
+    pageSize: String(pageSize),
     ...(selectedEmp ? { employeeId: selectedEmp.id } : {}),
     ...(range === "day" ? { from: dailyDate } : {}),
     ...(range === "custom" && customFrom ? { from: customFrom } : {}),
@@ -139,9 +228,7 @@ export default function OtLogsPage() {
 
   function searchEmployees(q: string) {
     setEmpSearch(q);
-    if (empSearchTimeout.current) {
-      clearTimeout(empSearchTimeout.current);
-    }
+    if (empSearchTimeout.current) clearTimeout(empSearchTimeout.current);
     if (!q) {
       setEmpResults([]);
       return;
@@ -150,11 +237,29 @@ export default function OtLogsPage() {
       const res = await fetch(
         `/api/employees/search?q=${encodeURIComponent(q)}`,
       );
-      const data = await res.json();
-      setEmpResults(data);
+      const result = await res.json();
+      setEmpResults(result);
       setShowEmpDrop(true);
     }, 250);
   }
+
+  function handleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" },
+    );
+  }
+
+  const sortedEntries = [...(data?.entries ?? [])].sort((a, b) => {
+    const av = sortValue(a, sort.key);
+    const bv = sortValue(b, sort.key);
+    const cmp =
+      typeof av === "number" && typeof bv === "number"
+        ? av - bv
+        : String(av).localeCompare(String(bv));
+    return sort.dir === "asc" ? cmp : -cmp;
+  });
 
   async function handleExport() {
     if (!canExport) {
@@ -178,7 +283,7 @@ export default function OtLogsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `OTFlow_Export.xlsx`;
+      a.download = "OTFlow_Export.xlsx";
       a.click();
       URL.revokeObjectURL(url);
       toast.success("Export ready");
@@ -187,283 +292,285 @@ export default function OtLogsPage() {
     }
   }
 
-  function handlePrint() {
-    window.print();
+  function clearAllFilters() {
+    setRange("week");
+    setDailyDate(format(new Date(), "yyyy-MM-dd"));
+    setCustomFrom("");
+    setCustomTo("");
+    setStatus("ALL");
+    setSelectedEmp(null);
+    setEmpSearch("");
+    setEmpResults([]);
+    setPage(1);
+  }
+
+  const activeFilters: Array<{ id: string; label: string; clear: () => void }> =
+    [];
+  if (range !== "week") {
+    activeFilters.push({
+      id: "range",
+      label: `Range: ${RANGES.find((r) => r.value === range)?.label ?? range}`,
+      clear: () => {
+        setRange("week");
+        setPage(1);
+      },
+    });
+  }
+  if (range === "day" && dailyDate) {
+    activeFilters.push({
+      id: "date",
+      label: `Date: ${dailyDate}`,
+      clear: () => {
+        setDailyDate(format(new Date(), "yyyy-MM-dd"));
+        setPage(1);
+      },
+    });
+  }
+  if (range === "custom" && customFrom) {
+    activeFilters.push({
+      id: "from",
+      label: `From: ${customFrom}`,
+      clear: () => {
+        setCustomFrom("");
+        setPage(1);
+      },
+    });
+  }
+  if (range === "custom" && customTo) {
+    activeFilters.push({
+      id: "to",
+      label: `To: ${customTo}`,
+      clear: () => {
+        setCustomTo("");
+        setPage(1);
+      },
+    });
+  }
+  if (status !== "ALL") {
+    activeFilters.push({
+      id: "status",
+      label: `Status: ${status}`,
+      clear: () => {
+        setStatus("ALL");
+        setPage(1);
+      },
+    });
+  }
+  if (selectedEmp) {
+    activeFilters.push({
+      id: "employee",
+      label: `Employee: ${selectedEmp.name}`,
+      clear: () => {
+        setSelectedEmp(null);
+        setEmpSearch("");
+        setPage(1);
+      },
+    });
   }
 
   const agg = data?.aggregates;
+  const kpis = [
+    {
+      title: "Volume",
+      items: [
+        {
+          label: "Total entries",
+          value: agg?.totalEntries ?? 0,
+          icon: Clock,
+          color: "var(--brand-600)",
+          bg: "var(--brand-50)",
+          featured: false,
+        },
+      ],
+    },
+    {
+      title: "Decisions",
+      items: [
+        {
+          label: "Pending",
+          value: data?.statusCounts?.PENDING ?? 0,
+          icon: AlertCircle,
+          color: "var(--status-pending-text)",
+          bg: "var(--status-pending-bg)",
+          featured: false,
+        },
+        {
+          label: "Approved",
+          value: data?.statusCounts?.APPROVED ?? 0,
+          icon: CheckCircle2,
+          color: "var(--status-approved-text)",
+          bg: "var(--status-approved-bg)",
+          featured: false,
+        },
+        {
+          label: "Rejected",
+          value: data?.statusCounts?.REJECTED ?? 0,
+          icon: XCircle,
+          color: "var(--status-rejected-text)",
+          bg: "var(--status-rejected-bg)",
+          featured: false,
+        },
+      ],
+    },
+    {
+      title: "Overtime",
+      items: [
+        {
+          label: "Normal",
+          value: formatMinutes(agg?.totalNormalMinutes ?? 0),
+          icon: Timer,
+          color: "var(--brand-600)",
+          bg: "var(--brand-50)",
+          featured: false,
+        },
+        {
+          label: "Double",
+          value: formatMinutes(agg?.totalDoubleMinutes ?? 0),
+          icon: Timer,
+          color: "var(--brand-600)",
+          bg: "var(--brand-50)",
+          featured: false,
+        },
+        {
+          label: "Triple",
+          value: formatMinutes(agg?.totalTripleMinutes ?? 0),
+          icon: Timer,
+          color: "var(--brand-700)",
+          bg: "var(--brand-100)",
+          featured: false,
+        },
+        {
+          label: "Approved OT",
+          value: formatMinutes(agg?.totalApprovedMinutes ?? 0),
+          icon: CheckCircle2,
+          color: "var(--brand-700)",
+          bg: "var(--brand-50)",
+          featured: true,
+        },
+      ],
+    },
+  ];
 
   return (
-    <>
-      {/* Print styles */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #print-area, #print-area * { visibility: visible; }
-          #print-area { position: absolute; left: 0; top: 0; width: 100%; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <AdminPageHeader
-            title="OT Logs"
-            sub={
-              data
-                ? `${data.dateFrom} → ${data.dateTo} · ${data.total} entries`
-                : "Loading..."
-            }
-            icon={ScrollText}
-          />
-          <div className="no-print" style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => setLogoOpen(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "0 14px",
-                height: 34,
-                border: "1px solid var(--border-base)",
-                borderRadius: "var(--radius-md)",
-                background: "var(--bg-card)",
-                fontSize: 13,
-                fontWeight: 500,
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-                transition: "background 0.12s",
-              }}
-              onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLElement).style.background =
-                  "var(--bg-muted)")
-              }
-              onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLElement).style.background =
-                  "var(--bg-card)")
-              }
-            >
-              <Building2 size={14} /> Company
-            </button>
-            {canExport && (
-              <button
-                onClick={handleExport}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "0 14px",
-                  height: 34,
-                  border: "1px solid var(--border-base)",
-                  borderRadius: "var(--radius-md)",
-                  background: "var(--bg-card)",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                  transition: "background 0.12s",
-                }}
-                onMouseEnter={(e) =>
-                  ((e.currentTarget as HTMLElement).style.background =
-                    "var(--bg-muted)")
-                }
-                onMouseLeave={(e) =>
-                  ((e.currentTarget as HTMLElement).style.background =
-                    "var(--bg-card)")
-                }
-              >
-                <Download size={14} /> Export Excel
-              </button>
-            )}
-            <button
-              onClick={handlePrint}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "0 14px",
-                height: 34,
-                border: "1px solid var(--border-base)",
-                borderRadius: "var(--radius-md)",
-                background: "var(--bg-card)",
-                fontSize: 13,
-                fontWeight: 500,
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-                transition: "background 0.12s",
-              }}
-              onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLElement).style.background =
-                  "var(--bg-muted)")
-              }
-              onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLElement).style.background =
-                  "var(--bg-card)")
-              }
-            >
-              <Printer size={14} /> Print
-            </button>
+    <div className="logs-page">
+      {/* Header */}
+      <div className="logs-head">
+        <div>
+          <div className="logs-head__eyebrow">Reports</div>
+          <h1 className="logs-head__title">
+            <span className="logs-head__icon">
+              <ScrollText size={18} />
+            </span>
+            OT Logs
+          </h1>
+          <div className="logs-head__sub">
+            {data
+              ? `${data.dateFrom} → ${data.dateTo} · ${data.total} entries`
+              : "Loading report..."}
           </div>
         </div>
-
-        {/* Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="no-print"
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border-base)",
-            borderRadius: "var(--radius-lg)",
-            padding: "16px 20px",
-            boxShadow: "var(--shadow-card)",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            alignItems: "flex-end",
-          }}
-        >
-          <SectionHeader title="Filters" icon={Filter} />
-
-          {/* Range tabs */}
-          <div
-            style={{ width: "100%", display: "flex", gap: 6, flexWrap: "wrap" }}
-          >
-            {RANGES.map((r) => (
-              <button
-                key={r.value}
-                onClick={() => {
-                  setRange(r.value);
-                  setPage(1);
-                }}
-                style={{
-                  padding: "5px 14px",
-                  borderRadius: 99,
-                  border: `1px solid ${range === r.value ? "var(--brand-300)" : "var(--border-base)"}`,
-                  background:
-                    range === r.value ? "var(--brand-50)" : "transparent",
-                  color:
-                    range === r.value
-                      ? "var(--brand-600)"
-                      : "var(--text-secondary)",
-                  fontSize: 12.5,
-                  fontWeight: range === r.value ? 600 : 400,
-                  cursor: "pointer",
-                  transition: "all 0.12s",
-                }}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Daily date picker */}
-          {range === "day" && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              style={{ display: "flex", alignItems: "center", gap: 10 }}
+        <div className="logs-head__actions no-print">
+          <button className="logs-btn" onClick={() => setLogoOpen(true)}>
+            <Building2 size={14} />
+            Company
+          </button>
+          <button className="logs-btn" onClick={() => window.print()}>
+            <Printer size={14} />
+            Print
+          </button>
+          {canExport && (
+            <button
+              className="logs-btn logs-btn--primary"
+              onClick={handleExport}
             >
-              <div>
-                <div
-                  style={{
-                    fontSize: 11.5,
-                    color: "var(--text-muted)",
-                    marginBottom: 4,
-                    fontWeight: 500,
+              <Download size={14} />
+              Export Excel
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <motion.div
+        className="logs-filters no-print"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="logs-filters__head">
+          <div className="logs-filters__title">
+            <span className="logs-filters__icon">
+              <Filter size={14} />
+            </span>
+            Filters
+          </div>
+          {activeFilters.length > 0 && (
+            <button className="logs-clear" onClick={clearAllFilters}>
+              <X size={12} />
+              Clear all
+            </button>
+          )}
+        </div>
+
+        <div className="logs-range">
+          {RANGES.map((r) => (
+            <button
+              key={r.value}
+              className="logs-range__tab"
+              data-active={range === r.value}
+              onClick={() => {
+                setRange(r.value);
+                setPage(1);
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="logs-filter-grid">
+          {range === "day" && (
+            <div className="logs-field">
+              <span className="logs-field__label">Select date</span>
+              <div className="logs-field__row">
+                <Input
+                  type="date"
+                  value={dailyDate}
+                  onChange={(e) => {
+                    setDailyDate(e.target.value);
+                    setPage(1);
+                  }}
+                  style={{ width: 170 }}
+                />
+                <button
+                  className="logs-btn"
+                  onClick={() => {
+                    setDailyDate(format(new Date(), "yyyy-MM-dd"));
+                    setPage(1);
                   }}
                 >
-                  Select Date
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Input
-                    type="date"
-                    value={dailyDate}
-                    onChange={(e) => {
-                      setDailyDate(e.target.value);
-                      setPage(1);
-                    }}
-                    style={{ width: 170 }}
-                  />
-                  <button
-                    onClick={() => {
-                      setDailyDate(format(new Date(), "yyyy-MM-dd"));
-                      setPage(1);
-                    }}
-                    style={{
-                      padding: "7px 12px",
-                      borderRadius: "var(--radius-md)",
-                      border: "1px solid var(--border-base)",
-                      background: "var(--bg-card)",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      color: "var(--text-secondary)",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                      transition: "background 0.12s",
-                    }}
-                    onMouseEnter={(e) =>
-                      ((e.currentTarget as HTMLElement).style.background =
-                        "var(--bg-muted)")
-                    }
-                    onMouseLeave={(e) =>
-                      ((e.currentTarget as HTMLElement).style.background =
-                        "var(--bg-card)")
-                    }
-                  >
-                    Today
-                  </button>
-                </div>
+                  Today
+                </button>
+                {dailyDate && (
+                  <span className="logs-field__note">
+                    {new Date(dailyDate + "T00:00:00Z").toLocaleDateString(
+                      "en-US",
+                      {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                        timeZone: "UTC",
+                      },
+                    )}
+                  </span>
+                )}
               </div>
-              {dailyDate && (
-                <div
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "var(--radius-md)",
-                    background: "var(--brand-50)",
-                    border: "1px solid var(--brand-100)",
-                    fontSize: 12.5,
-                    color: "var(--brand-700)",
-                    fontWeight: 500,
-                    alignSelf: "flex-end",
-                    marginBottom: 1,
-                  }}
-                >
-                  {new Date(dailyDate + "T00:00:00Z").toLocaleDateString(
-                    "en-US",
-                    {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      timeZone: "UTC",
-                    },
-                  )}
-                </div>
-              )}
-            </motion.div>
+            </div>
           )}
 
-          {/* Custom date range */}
           {range === "custom" && (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div>
-                <div
-                  style={{
-                    fontSize: 11.5,
-                    color: "var(--text-muted)",
-                    marginBottom: 4,
-                  }}
-                >
-                  From
-                </div>
+            <>
+              <div className="logs-field">
+                <span className="logs-field__label">From</span>
                 <Input
                   type="date"
                   value={customFrom}
@@ -474,16 +581,8 @@ export default function OtLogsPage() {
                   style={{ width: 160 }}
                 />
               </div>
-              <div>
-                <div
-                  style={{
-                    fontSize: 11.5,
-                    color: "var(--text-muted)",
-                    marginBottom: 4,
-                  }}
-                >
-                  To
-                </div>
+              <div className="logs-field">
+                <span className="logs-field__label">To</span>
                 <Input
                   type="date"
                   value={customTo}
@@ -494,178 +593,75 @@ export default function OtLogsPage() {
                   style={{ width: 160 }}
                 />
               </div>
-            </div>
+            </>
           )}
 
-          {/* Status + Employee filter row */}
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              alignItems: "flex-end",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: 11.5,
-                  color: "var(--text-muted)",
-                  marginBottom: 4,
-                }}
-              >
-                Status
-              </div>
-              <Select
-                value={status}
-                onChange={(e) => {
-                  setStatus(e.target.value);
-                  setPage(1);
-                }}
-                style={{ width: 160 }}
-              >
-                {STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
+          <div className="logs-field">
+            <span className="logs-field__label">Status</span>
+            <Select
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+              style={{ width: 160 }}
+            >
+              {STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </div>
 
-            {/* Employee filter */}
-            <div style={{ position: "relative" }}>
-              <div
-                style={{
-                  fontSize: 11.5,
-                  color: "var(--text-muted)",
-                  marginBottom: 4,
-                }}
-              >
-                Employee
-              </div>
+          <div className="logs-field">
+            <span className="logs-field__label">Employee</span>
+            <div className="logs-employee">
               {selectedEmp ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "7px 10px",
-                    border: "1px solid var(--border-base)",
-                    borderRadius: "var(--radius-md)",
-                    background: "var(--bg-muted)",
-                    fontSize: 13,
-                  }}
-                >
-                  <span
-                    style={{ color: "var(--text-primary)", fontWeight: 500 }}
-                  >
-                    {selectedEmp.name}
-                  </span>
+                <div className="logs-employee__selected">
+                  <span>{selectedEmp.name}</span>
                   <button
+                    className="logs-employee__remove"
                     onClick={() => {
                       setSelectedEmp(null);
                       setEmpSearch("");
+                      setPage(1);
                     }}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      color: "var(--text-muted)",
-                      display: "flex",
-                    }}
+                    aria-label="Clear employee filter"
                   >
                     <X size={12} />
                   </button>
                 </div>
               ) : (
                 <>
-                  <div style={{ position: "relative" }}>
-                    <Search
-                      size={13}
-                      style={{
-                        position: "absolute",
-                        left: 9,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        color: "var(--text-muted)",
-                      }}
-                    />
-                    <input
-                      value={empSearch}
-                      onChange={(e) => searchEmployees(e.target.value)}
-                      onFocus={() =>
-                        empResults.length > 0 && setShowEmpDrop(true)
-                      }
-                      onBlur={() =>
-                        setTimeout(() => setShowEmpDrop(false), 150)
-                      }
-                      placeholder="Search employee..."
-                      style={{
-                        paddingLeft: 28,
-                        paddingRight: 10,
-                        paddingTop: 7,
-                        paddingBottom: 7,
-                        border: "1px solid var(--border-base)",
-                        borderRadius: "var(--radius-md)",
-                        fontSize: 13,
-                        color: "var(--text-primary)",
-                        background: "var(--bg-base)",
-                        outline: "none",
-                        width: 200,
-                      }}
-                    />
-                  </div>
+                  <Search size={13} className="logs-employee__icon" />
+                  <input
+                    className="logs-employee__input"
+                    value={empSearch}
+                    onChange={(e) => searchEmployees(e.target.value)}
+                    onFocus={() =>
+                      empResults.length > 0 && setShowEmpDrop(true)
+                    }
+                    onBlur={() =>
+                      setTimeout(() => setShowEmpDrop(false), 150)
+                    }
+                    placeholder="Search employee..."
+                    aria-label="Search employee"
+                  />
                   {showEmpDrop && empResults.length > 0 && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "calc(100% + 4px)",
-                        left: 0,
-                        width: 240,
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-base)",
-                        borderRadius: "var(--radius-md)",
-                        boxShadow: "var(--shadow-dropdown)",
-                        zIndex: 100,
-                        overflow: "hidden",
-                      }}
-                    >
+                    <div className="logs-employee__menu">
                       {empResults.map((emp) => (
                         <button
                           key={emp.id}
+                          className="logs-employee__option"
                           onClick={() => {
                             setSelectedEmp(emp);
                             setShowEmpDrop(false);
                             setPage(1);
                           }}
-                          style={{
-                            width: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "8px 12px",
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            textAlign: "left",
-                            fontSize: 13,
-                            color: "var(--text-primary)",
-                          }}
-                          onMouseEnter={(e) =>
-                            ((e.currentTarget as HTMLElement).style.background =
-                              "var(--bg-muted)")
-                          }
-                          onMouseLeave={(e) =>
-                            ((e.currentTarget as HTMLElement).style.background =
-                              "none")
-                          }
                         >
-                          <span style={{ fontWeight: 500 }}>{emp.name}</span>
-                          <span
-                            style={{ fontSize: 11, color: "var(--text-muted)" }}
-                          >
-                            #{emp.empId}
-                          </span>
+                          <span>{emp.name}</span>
+                          <span>#{emp.empId}</span>
                         </button>
                       ))}
                     </div>
@@ -674,540 +670,285 @@ export default function OtLogsPage() {
               )}
             </div>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Aggregates */}
-        {agg && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-              gap: 10,
-            }}
-          >
-            {[
-              {
-                label: "Total Entries",
-                value: agg.totalEntries,
-                icon: Clock,
-                color: "var(--brand-500)",
-                bg: "var(--brand-50)",
-              },
-              {
-                label: "Pending",
-                value: data?.statusCounts?.PENDING ?? 0,
-                icon: AlertCircle,
-                color: "var(--status-pending-text)",
-                bg: "var(--status-pending-bg)",
-              },
-              {
-                label: "Approved",
-                value: data?.statusCounts?.APPROVED ?? 0,
-                icon: CheckCircle2,
-                color: "var(--status-approved-text)",
-                bg: "var(--status-approved-bg)",
-              },
-              {
-                label: "Rejected",
-                value: data?.statusCounts?.REJECTED ?? 0,
-                icon: XCircle,
-                color: "var(--status-rejected-text)",
-                bg: "var(--status-rejected-bg)",
-              },
-              {
-                label: "Normal OT",
-                value: formatMinutes(agg.totalNormalMinutes),
-                icon: Timer,
-                color: "var(--brand-500)",
-                bg: "var(--brand-50)",
-              },
-              {
-                label: "Double OT",
-                value: formatMinutes(agg.totalDoubleMinutes),
-                icon: Timer,
-                color: "var(--brand-600)",
-                bg: "var(--brand-50)",
-              },
-              {
-                label: "Triple OT",
-                value: formatMinutes(agg.totalTripleMinutes),
-                icon: Timer,
-                color: "var(--brand-700)",
-                bg: "var(--brand-100)",
-              },
-              {
-                label: "Approved OT",
-                value: formatMinutes(agg.totalApprovedMinutes),
-                icon: CheckCircle2,
-                color: "var(--status-approved-text)",
-                bg: "var(--status-approved-bg)",
-              },
-            ].map(({ label, value, icon: Icon, color, bg }, i) => (
-              <motion.div
-                key={label}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-base)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "12px 14px",
-                  boxShadow: "var(--shadow-card)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                }}
-              >
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "var(--radius-sm)",
-                    background: bg,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Icon size={15} color={color} />
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "var(--text-muted)",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {label}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 700,
-                      color: "var(--text-primary)",
-                      letterSpacing: "-0.3px",
-                    }}
-                  >
-                    {value}
-                  </div>
-                </div>
-              </motion.div>
+        {activeFilters.length > 0 && (
+          <div className="logs-active">
+            <span className="logs-active__label">Active</span>
+            {activeFilters.map((filter) => (
+              <span key={filter.id} className="logs-chip">
+                {filter.label}
+                <button onClick={filter.clear} aria-label="Remove filter">
+                  <X size={11} />
+                </button>
+              </span>
             ))}
           </div>
         )}
+      </motion.div>
 
-        {/* Pagination */}
-        {data && data.totalPages > 1 && (
-          <div
-            className="no-print"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "12px 16px",
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-base)",
-              borderRadius: "var(--radius-md)",
-            }}
+      {/* KPIs */}
+      <div className="logs-kpis">
+        {kpis.map((group) => (
+          <motion.div
+            key={group.title}
+            className="logs-kpi-group"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-              Showing {(page - 1) * 50 + 1}–{Math.min(page * 50, data.total)} of{" "}
-              {data.total} entries
+            <div className="logs-kpi-group__title">{group.title}</div>
+            <div className="logs-kpi-group__items">
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.label}
+                    className={`logs-kpi${item.featured ? " logs-kpi--featured" : ""}`}
+                  >
+                    <span
+                      className="logs-kpi__icon"
+                      style={{ background: item.bg, color: item.color }}
+                    >
+                      <Icon size={14} />
+                    </span>
+                    <span>
+                      <span className="logs-kpi__label">{item.label}</span>
+                      <span
+                        className="logs-kpi__value"
+                        style={{ display: "block" }}
+                      >
+                        {item.value}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Report table */}
+      <div id="print-area">
+        <div className="logs-print-header">
+          {companyLogo && <img src={companyLogo} alt="Company logo" />}
+          <div>
+            <h1>{companyName || "OTFlow"} — OT Logs</h1>
+            <p>
+              {data?.dateFrom} to {data?.dateTo} · {data?.total ?? 0} entries ·
+              Approved OT {formatMinutes(agg?.totalApprovedMinutes ?? 0)}
+            </p>
+          </div>
+        </div>
+
+        <div className="logs-table-card">
+          <div className="logs-table-scroll">
+            <div className="logs-table">
+              <div className="logs-head-row">
+                {SORT_COLUMNS.map((column) => (
+                  <SortHeader
+                    key={column.key}
+                    column={column}
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                ))}
+              </div>
+
+              {isLoading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="logs-skeleton-row">
+                    {SORT_COLUMNS.map((column) => (
+                      <span key={column.key} className="logs-skeleton" />
+                    ))}
+                  </div>
+                ))
+              ) : sortedEntries.length === 0 ? (
+                <div className="logs-empty">
+                  <span className="logs-empty__icon">
+                    <Search size={20} />
+                  </span>
+                  <span className="logs-empty__title">No entries found</span>
+                  <span className="logs-empty__sub">
+                    Try widening the date range or clearing your filters.
+                  </span>
+                  <button className="logs-btn" onClick={clearAllFilters}>
+                    Clear filters
+                  </button>
+                </div>
+              ) : (
+                sortedEntries.map((entry, i) => (
+                  <motion.div
+                    key={entry.id}
+                    className="logs-row"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: Math.min(i * 0.02, 0.3) }}
+                  >
+                    <div>
+                      <span className="logs-emp-id">{entry.employee.empId}</span>
+                    </div>
+                    <div>
+                      <div className="logs-name">{entry.employee.name}</div>
+                      <div className="logs-meta">
+                        {entry.inTime && (
+                          <span>
+                            {entry.inTime} – {entry.outTime}
+                          </span>
+                        )}
+                        {entry.isNight && (
+                          <span className="logs-tag" data-kind="night">
+                            <Moon size={10} /> Night
+                          </span>
+                        )}
+                        {entry.manualOverride && (
+                          <span className="logs-tag" data-kind="manual">
+                            <AlertTriangle size={10} /> Manual
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>
+                      {formatDate(entry.workDate)}
+                    </div>
+                    <div>
+                      <span className="logs-shift">{entry.shift}</span>
+                    </div>
+                    <div className="logs-number">
+                      {entry.normalMinutes > 0
+                        ? formatMinutes(entry.normalMinutes)
+                        : "—"}
+                    </div>
+                    <div className="logs-number">
+                      {entry.doubleMinutes > 0
+                        ? formatMinutes(entry.doubleMinutes)
+                        : "—"}
+                    </div>
+                    <div className="logs-number">
+                      {entry.tripleMinutes > 0
+                        ? formatMinutes(entry.tripleMinutes)
+                        : "—"}
+                    </div>
+                    <div className="logs-status-cell">
+                      <StatusBadge status={entry.status} iconWithText />
+                      {(entry.decidedBy || entry.decisionReason) && (
+                        <span
+                          className="logs-decision"
+                          title={
+                            entry.decisionReason ?? entry.reason ?? undefined
+                          }
+                        >
+                          {entry.decidedBy?.username ?? "—"}
+                          {entry.decidedAt &&
+                            ` · ${format(new Date(entry.decidedAt), "dd MMM")}`}
+                          {entry.decisionReason && " · reason"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="logs-number logs-number--total">
+                      {entry.approvedTotalMinutes > 0
+                        ? formatMinutes(entry.approvedTotalMinutes)
+                        : "—"}
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="logs-mobile">
+            {sortedEntries.map((entry) => (
+              <div key={entry.id} className="logs-mobile__card">
+                <div className="logs-mobile__top">
+                  <span className="logs-emp-id">{entry.employee.empId}</span>
+                  <div className="logs-mobile__body">
+                    <div className="logs-name">{entry.employee.name}</div>
+                    <div className="logs-mobile__date">
+                      {formatDate(entry.workDate)} · {entry.shift}
+                    </div>
+                  </div>
+                  <StatusBadge status={entry.status} />
+                </div>
+                <div className="logs-mobile__numbers">
+                  <span>Normal {formatMinutes(entry.normalMinutes)}</span>
+                  <span>Double {formatMinutes(entry.doubleMinutes)}</span>
+                  <span>Triple {formatMinutes(entry.tripleMinutes)}</span>
+                  <span>
+                    Approved {formatMinutes(entry.approvedTotalMinutes)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {data && data.totalPages > 1 && (
+        <div className="logs-pagination no-print">
+          <span className="logs-pagination__info">
+            Showing {(page - 1) * pageSize + 1}–
+            {Math.min(page * pageSize, data.total)} of {data.total} entries
+          </span>
+          <div className="logs-pagination__right">
+            <label className="logs-page-size">
+              Rows
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+            <div className="logs-pages">
               <button
+                className="logs-page-btn"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-base)",
-                  background: "var(--bg-card)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: page === 1 ? "not-allowed" : "pointer",
-                  opacity: page === 1 ? 0.4 : 1,
-                  color: "var(--text-secondary)",
-                }}
               >
                 <ChevronLeft size={14} />
               </button>
               {getPageNumbers(page, data.totalPages).map((p, i) =>
                 p === "..." ? (
-                  <div
-                    key={`ellipsis-${i}`}
-                    style={{
-                      width: 30,
-                      height: 30,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "var(--text-muted)",
-                      fontSize: 12.5,
-                    }}
-                  >
+                  <span key={`ellipsis-${i}`} className="logs-ellipsis">
                     …
-                  </div>
+                  </span>
                 ) : (
                   <button
                     key={p}
+                    className="logs-page-btn"
+                    data-active={page === p}
                     onClick={() => setPage(p)}
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: "var(--radius-sm)",
-                      border: `1px solid ${page === p ? "var(--brand-300)" : "var(--border-base)"}`,
-                      background:
-                        page === p ? "var(--brand-50)" : "var(--bg-card)",
-                      color:
-                        page === p
-                          ? "var(--brand-600)"
-                          : "var(--text-secondary)",
-                      fontSize: 12.5,
-                      fontWeight: page === p ? 600 : 400,
-                      cursor: "pointer",
-                    }}
                   >
                     {p}
                   </button>
                 ),
               )}
               <button
-                onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
+                className="logs-page-btn"
+                onClick={() =>
+                  setPage((p) => Math.min(data.totalPages, p + 1))
+                }
                 disabled={page === data.totalPages}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-base)",
-                  background: "var(--bg-card)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: page === data.totalPages ? "not-allowed" : "pointer",
-                  opacity: page === data.totalPages ? 0.4 : 1,
-                  color: "var(--text-secondary)",
-                }}
               >
                 <ChevronRight size={14} />
               </button>
             </div>
           </div>
-        )}
-
-        {/* Table */}
-        <div id="print-area" ref={printRef}>
-          {/* Print header */}
-          <div style={{ display: "none" }} className="print-header">
-            <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-              OTFlow — OT Logs
-            </h1>
-            <p style={{ fontSize: 12, color: "#666" }}>
-              {data?.dateFrom} to {data?.dateTo} · Exported{" "}
-              {new Date().toLocaleDateString()}
-            </p>
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-base)",
-              borderRadius: "var(--radius-lg)",
-              overflow: "hidden",
-              boxShadow: "var(--shadow-card)",
-            }}
-          >
-            {/* Table header */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "90px 1fr 100px 120px 80px 80px 80px 100px 110px",
-                padding: "10px 16px",
-                borderBottom: "1px solid var(--border-base)",
-                background: "var(--bg-muted)",
-              }}
-            >
-              {[
-                "Emp ID",
-                "Employee",
-                "Date",
-                "Shift",
-                "Normal",
-                "Double",
-                "Triple",
-                "Status",
-                "Approved OT",
-              ].map((h) => (
-                <div
-                  key={h}
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "var(--text-muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  {h}
-                </div>
-              ))}
-            </div>
-
-            {isLoading && (
-              <div
-                style={{
-                  padding: "48px 0",
-                  textAlign: "center",
-                  color: "var(--text-muted)",
-                  fontSize: 13,
-                }}
-              >
-                Loading entries...
-              </div>
-            )}
-
-            {!isLoading && (!data?.entries || data.entries.length === 0) && (
-              <div
-                style={{
-                  padding: "48px 0",
-                  textAlign: "center",
-                  color: "var(--text-muted)",
-                  fontSize: 13,
-                }}
-              >
-                No entries found for the selected filters
-              </div>
-            )}
-
-            {!isLoading &&
-              data?.entries.map((entry, i) => (
-                <motion.div
-                  key={entry.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.02 }}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "90px 1fr 100px 120px 80px 80px 80px 120px 110px",
-                    padding: "12px 16px",
-                    borderBottom:
-                      i < data.entries.length - 1
-                        ? "1px solid var(--border-base)"
-                        : "none",
-                    alignItems: "center",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background =
-                      "var(--bg-muted)")
-                  }
-                  onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background =
-                      "transparent")
-                  }
-                >
-                  {/* Employee ID */}
-                  <div>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        background: "var(--brand-50)",
-                        border: "1px solid var(--brand-200)",
-                        color: "var(--brand-600)",
-                        fontSize: 11,
-                        fontWeight: 700,
-                      }}
-                    >
-                      {entry.employee.empId}
-                    </span>
-                  </div>
-
-                  {/* Employee */}
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "var(--text-primary)",
-                      }}
-                    >
-                      {entry.employee.name}
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: 3,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        flexWrap: "wrap",
-                        fontSize: 11,
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {entry.inTime && (
-                        <span>
-                          {entry.inTime} – {entry.outTime}
-                        </span>
-                      )}
-
-                      {entry.isNight && (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 3,
-                            padding: "2px 6px",
-                            borderRadius: 999,
-                            background: "rgba(99,102,241,.10)",
-                            border: "1px solid rgba(99,102,241,.2)",
-                          }}
-                        >
-                          <Moon size={10} />
-                          Night
-                        </span>
-                      )}
-
-                      {entry.manualOverride && (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 3,
-                            padding: "2px 6px",
-                            borderRadius: 999,
-                            background: "var(--status-pending-bg)",
-                            border: "1px solid var(--status-pending-border)",
-                            color: "var(--status-pending-text)",
-                          }}
-                        >
-                          <AlertTriangle size={10} />
-                          Manual
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Date */}
-                  <div
-                    style={{
-                      fontSize: 12.5,
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {formatDate(entry.workDate)}
-                  </div>
-
-                  {/* Shift */}
-                  <div>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        background: "var(--bg-muted)",
-                        border: "1px solid var(--border-base)",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "var(--text-primary)",
-                      }}
-                    >
-                      {entry.shift}
-                    </span>
-                  </div>
-
-                  {/* Normal */}
-                  <div
-                    style={{
-                      textAlign: "center",
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {entry.normalMinutes > 0
-                      ? formatMinutes(entry.normalMinutes)
-                      : "—"}
-                  </div>
-
-                  {/* Double */}
-                  <div
-                    style={{
-                      textAlign: "center",
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {entry.doubleMinutes > 0
-                      ? formatMinutes(entry.doubleMinutes)
-                      : "—"}
-                  </div>
-
-                  {/* Triple */}
-                  <div
-                    style={{
-                      textAlign: "center",
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {entry.tripleMinutes > 0
-                      ? formatMinutes(entry.tripleMinutes)
-                      : "—"}
-                  </div>
-
-                  {/* Status */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <StatusBadge status={entry.status} iconWithText />
-                  </div>
-
-                  {/* Approved */}
-                  <div
-                    style={{
-                      textAlign: "center",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {entry.approvedTotalMinutes > 0
-                      ? formatMinutes(entry.approvedTotalMinutes)
-                      : "—"}
-                  </div>
-                </motion.div>
-              ))}
-          </motion.div>
         </div>
-      </div>
+      )}
 
-      {/* Logo Settings Modal */}
       <LogoSettings
         open={logoOpen}
         onClose={() => setLogoOpen(false)}
         onSaved={(name) => setCompanyName(name)}
       />
-    </>
+    </div>
   );
 }

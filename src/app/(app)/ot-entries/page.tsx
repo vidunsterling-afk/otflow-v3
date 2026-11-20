@@ -1,8 +1,7 @@
-/* eslint-disable react-hooks/preserve-manual-memoization */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useState, useCallback, useReducer } from "react";
+import { useState, useCallback, useReducer, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
@@ -20,15 +19,11 @@ import {
   CheckSquare,
   Square,
   Users,
+  Search,
 } from "lucide-react";
-import {
-  getWeekDates,
-  formatDate,
-  formatMinutes,
-  getDayOfWeek,
-} from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
+import { getWeekDates, formatDate, formatMinutes } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { SectionHeader } from "@/components/ui/SectionHeader";
 import { AddEntryModal } from "@/components/ot/AddEntryModal";
 import {
   ApproveModal,
@@ -36,11 +31,10 @@ import {
   EditEntryModal,
   BulkApproveModal,
 } from "@/components/ot/EntryActionModals";
-import { RefreshCcw } from "@deemlol/next-icons";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { Status } from "@/lib/types";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import "./ot-entries.css";
 
 interface OtEntry {
   id: string;
@@ -65,17 +59,16 @@ interface DaySummary {
   _count: { _all: number };
 }
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+type StatusFilter = "ALL" | Status;
 
-const EASE = [0.22, 1, 0.36, 1] as const; // consistent "easeOutExpo"-ish curve used throughout
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const EASE = [0.22, 1, 0.36, 1] as const;
 
 // ─── Animation variants ────────────────────────────────────────────
 
 const weekGridVariants: Variants = {
   hidden: {},
-  show: {
-    transition: { staggerChildren: 0.035 },
-  },
+  show: { transition: { staggerChildren: 0.035 } },
 };
 
 const dayCardVariants: Variants = {
@@ -90,9 +83,7 @@ const dayCardVariants: Variants = {
 
 const entryListVariants: Variants = {
   hidden: {},
-  show: {
-    transition: { staggerChildren: 0.03 },
-  },
+  show: { transition: { staggerChildren: 0.03 } },
 };
 
 const entryRowVariants: Variants = {
@@ -133,14 +124,28 @@ function selectionReducer(
   }
 }
 
+function entryTotalMinutes(entry: OtEntry): number {
+  if (entry.status === "APPROVED") return entry.approvedTotalMinutes;
+  return entry.normalMinutes + entry.doubleMinutes * 2 + entry.tripleMinutes * 3;
+}
+
+const STATUS_RANK: Record<Status, number> = {
+  PENDING: 0,
+  APPROVED: 1,
+  REJECTED: 2,
+};
+
 export default function OtEntriesPage() {
   const { data: session } = useSession();
-  const permissions = (session?.user as any)?.permissions ?? [];
+  const permissions =
+    (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
   const canApprove = permissions.includes("ot:approve");
   const canEdit = permissions.includes("ot:edit");
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [approveEntry, setApproveEntry] = useState<OtEntry | null>(null);
   const [rejectEntry, setRejectEntry] = useState<OtEntry | null>(null);
@@ -161,6 +166,14 @@ export default function OtEntriesPage() {
   const weekDates = getWeekDates(baseDate);
   const weekStart = weekDates[0];
   const weekEnd = weekDates[6];
+  const today = new Date().toISOString().split("T")[0];
+
+  useEffect(() => {
+    setSelectedDate(today >= weekStart && today <= weekEnd ? today : weekStart);
+    setStatusFilter("ALL");
+    setSearch("");
+    dispatchSelection({ type: "CLEAR" });
+  }, [weekStart, weekEnd, today]);
 
   const { data: weekSummary = [], isFetching: weekFetching } = useQuery<
     DaySummary[]
@@ -206,13 +219,19 @@ export default function OtEntriesPage() {
     const rejected =
       rows.find((r: { status: string }) => r.status === "REJECTED")?._count
         ._all ?? 0;
-    return {
-      pending,
-      approved,
-      rejected,
-      total: pending + approved + rejected,
-    };
+    return { pending, approved, rejected, total: pending + approved + rejected };
   }
+
+  const weekCounts = weekDates.reduce(
+    (acc, date) => {
+      const counts = getDayCounts(date);
+      acc.total += counts.total;
+      acc.pending += counts.pending;
+      acc.approved += counts.approved;
+      return acc;
+    },
+    { total: 0, pending: 0, approved: 0 },
+  );
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this OT entry?")) return;
@@ -244,426 +263,301 @@ export default function OtEntriesPage() {
       : 0;
   const isDayIncomplete = missingCount > 0;
 
-  const today = new Date().toISOString().split("T")[0];
+  const dayPending = pendingEntries.length;
+  const dayApproved = dayEntries.filter((e) => e.status === "APPROVED").length;
+  const dayTotalMinutes = dayEntries.reduce(
+    (sum, entry) => sum + entryTotalMinutes(entry),
+    0,
+  );
 
-  // Custom Header
-  const headerWeekStartDate = formatDate(weekStart);
-  const headerWeekEndDate = formatDate(weekEnd);
+  const searchTerm = search.trim().toLowerCase();
+  const visibleEntries = dayEntries
+    .filter(
+      (entry) => statusFilter === "ALL" || entry.status === statusFilter,
+    )
+    .filter((entry) =>
+      searchTerm
+        ? `${entry.employee.name} ${entry.employee.empId} ${entry.shift}`
+            .toLowerCase()
+            .includes(searchTerm)
+        : true,
+    )
+    .sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status]);
+
+  const tabs: Array<{ key: StatusFilter; label: string; count: number }> = [
+    { key: "ALL", label: "All", count: dayEntries.length },
+    { key: "PENDING", label: "Pending", count: dayPending },
+    { key: "APPROVED", label: "Approved", count: dayApproved },
+    {
+      key: "REJECTED",
+      label: "Rejected",
+      count: dayEntries.length - dayPending - dayApproved,
+    },
+  ];
+
+  function selectDay(date: string) {
+    setSelectedDate((current) => (current === date ? null : date));
+    setStatusFilter("ALL");
+    setSearch("");
+    dispatchSelection({ type: "CLEAR" });
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="ot-page">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <AdminPageHeader
-          title="OT Entries"
-          sub={`${headerWeekStartDate} - ${headerWeekEndDate}`}
-          icon={Clock}
-        />
+      <div className="ot-head">
+        <div>
+          <div className="ot-head__eyebrow">Time &amp; Attendance</div>
+          <h1 className="ot-head__title">
+            <span className="ot-head__icon">
+              <Clock size={18} />
+            </span>
+            OT Entries
+          </h1>
+          <div className="ot-head__sub">
+            {formatDate(weekStart)} – {formatDate(weekEnd)}
+          </div>
+        </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="ot-head__tools">
+          <div className="ot-summary">
+            <span className="ot-summary__chip">
+              <strong>{weekCounts.total}</strong> this week
+            </span>
+            <span className="ot-summary__chip" data-tone="pending">
+              <strong>{weekCounts.pending}</strong> pending
+            </span>
+            <span className="ot-summary__chip">
+              <strong>
+                {selectedDate ? formatMinutes(dayTotalMinutes) : "—"}
+              </strong>
+              selected day
+            </span>
+          </div>
+
           <AnimatePresence>
             {weekOffset !== 0 && (
               <motion.button
-                initial={{ opacity: 0, scale: 0.9, width: 0 }}
-                animate={{ opacity: 1, scale: 1, width: "auto" }}
-                exit={{ opacity: 0, scale: 0.9, width: 0 }}
+                initial={{ opacity: 0, width: 0, padding: 0 }}
+                animate={{ opacity: 1, width: "auto", padding: "0 13px" }}
+                exit={{ opacity: 0, width: 0, padding: 0 }}
                 transition={{ duration: 0.18, ease: EASE }}
+                className="ot-btn"
                 onClick={() => setWeekOffset(0)}
-                style={{
-                  padding: "0 12px",
-                  height: 34,
-                  border: "1px solid var(--border-base)",
-                  borderRadius: "var(--radius-md)",
-                  background: "var(--bg-card)",
-                  fontSize: 12.5,
-                  fontWeight: 500,
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                  overflow: "hidden",
-                  whiteSpace: "nowrap",
-                }}
+                style={{ overflow: "hidden" }}
               >
                 Today
               </motion.button>
             )}
           </AnimatePresence>
 
-          {/* Week nav */}
-          <div
-            style={{
-              display: "flex",
-              border: "1px solid var(--border-base)",
-              borderRadius: "var(--radius-md)",
-              overflow: "hidden",
-            }}
-          >
-            {[
-              {
-                icon: ChevronLeft,
-                action: () => setWeekOffset((p) => p - 1),
-                label: "Previous week",
-              },
-              {
-                icon: ChevronRight,
-                action: () => setWeekOffset((p) => p + 1),
-                label: "Next week",
-              },
-            ].map(({ icon: Icon, action, label }, i) => (
-              <button
-                key={i}
-                onClick={action}
-                title={label}
-                style={{
-                  width: 34,
-                  height: 34,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "none",
-                  background: "var(--bg-card)",
-                  cursor: "pointer",
-                  color: "var(--text-secondary)",
-                  borderRight:
-                    i === 0 ? "1px solid var(--border-base)" : "none",
-                  transition: "background 0.15s ease",
-                }}
-                onMouseEnter={(e) =>
-                  ((e.currentTarget as HTMLElement).style.background =
-                    "var(--bg-muted)")
-                }
-                onMouseLeave={(e) =>
-                  ((e.currentTarget as HTMLElement).style.background =
-                    "var(--bg-card)")
-                }
-              >
-                <Icon size={15} />
-              </button>
-            ))}
+          <div className="ot-nav">
+            <button
+              className="ot-nav__btn"
+              onClick={() => setWeekOffset((p) => p - 1)}
+              title="Previous week"
+              aria-label="Previous week"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              className="ot-nav__btn"
+              onClick={() => setWeekOffset((p) => p + 1)}
+              title="Next week"
+              aria-label="Next week"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
 
           {canEdit && (
             <motion.button
-              whileTap={{ scale: 0.96 }}
+              whileTap={{ scale: 0.97 }}
+              className="ot-btn ot-btn--primary"
               onClick={() => setAddOpen(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "0 14px",
-                height: 34,
-                border: "none",
-                borderRadius: "var(--radius-md)",
-                background: "var(--brand-500)",
-                color: "white",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                touchAction: "manipulation",
-              }}
             >
-              <Plus size={14} />
+              <Plus size={15} />
               Add Entry
             </motion.button>
           )}
         </div>
       </div>
 
-      {/* Week day cards */}
+      {/* Week strip */}
       <AnimatePresence mode="wait">
         <motion.div
           key={weekStart}
+          className="ot-week"
           variants={weekGridVariants}
           initial="hidden"
           animate="show"
           exit={{ opacity: 0, transition: { duration: 0.15 } }}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gap: 10,
-          }}
         >
-          {weekDates.map((date, i) => {
-            const counts = getDayCounts(date);
-            const isSelected = selectedDate === date;
-            const isToday = date === today;
+          <div className="ot-week__grid">
+            {weekDates.map((date, i) => {
+              const counts = getDayCounts(date);
+              const isSelected = selectedDate === date;
+              const isToday = date === today;
 
-            return (
-              <motion.button
-                key={date}
-                variants={dayCardVariants}
-                onClick={() => {
-                  setSelectedDate(isSelected ? null : date);
-                  dispatchSelection({ type: "CLEAR" });
-                }}
-                whileHover={{
-                  y: -2,
-                  transition: { duration: 0.15, ease: EASE },
-                }}
-                whileTap={{ scale: 0.97 }}
-                style={{
-                  border: `1px solid ${
-                    isSelected ? "var(--brand-300)" : "var(--border-base)"
-                  }`,
-                  borderRadius: "var(--radius-lg)",
-                  padding: "14px 10px",
-                  background: isSelected ? "var(--brand-50)" : "var(--bg-card)",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  boxShadow: isSelected
-                    ? "0 0 0 2px var(--brand-200)"
-                    : "var(--shadow-card)",
-                  transition:
-                    "border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    color: isSelected
-                      ? "var(--brand-500)"
-                      : "var(--text-muted)",
-                    marginBottom: 4,
-                  }}
+              return (
+                <motion.button
+                  key={date}
+                  variants={dayCardVariants}
+                  className="ot-day"
+                  data-selected={isSelected}
+                  data-today={isToday}
+                  onClick={() => selectDay(date)}
+                  whileHover={{ y: -2, transition: { duration: 0.15, ease: EASE } }}
+                  whileTap={{ scale: 0.97 }}
                 >
-                  {DAY_LABELS[i]}
-                </div>
+                  <div className="ot-day__top">
+                    <span className="ot-day__label">{DAY_LABELS[i]}</span>
+                    {isToday && <span className="ot-day__today">Today</span>}
+                  </div>
+                  <div className="ot-day__num" data-today={isToday}>
+                    {date.split("-")[2]}
+                  </div>
 
-                <div
-                  style={{
-                    fontSize: 18,
-                    fontWeight: 700,
-                    letterSpacing: "-0.4px",
-                    color: isToday ? "var(--brand-500)" : "var(--text-primary)",
-                    marginBottom: 2,
-                  }}
-                >
-                  {date.split("-")[2]}
-                </div>
+                  <div className="ot-day__counts">
+                    {weekFetching ? (
+                      <span className="ot-spinner" aria-label="Loading" />
+                    ) : counts.total > 0 ? (
+                      <>
+                        {counts.pending > 0 && (
+                          <span className="ot-day__pill" data-kind="PENDING">
+                            {counts.pending} pending
+                          </span>
+                        )}
+                        {counts.approved > 0 && (
+                          <span className="ot-day__pill" data-kind="APPROVED">
+                            {counts.approved} approved
+                          </span>
+                        )}
+                        {counts.rejected > 0 && (
+                          <span className="ot-day__pill" data-kind="REJECTED">
+                            {counts.rejected} rejected
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="ot-day__empty">No entries</span>
+                    )}
+                  </div>
 
-                {isToday && (
-                  <motion.div
-                    layoutId="today-dot"
-                    style={{
-                      width: 4,
-                      height: 4,
-                      borderRadius: "50%",
-                      background: "var(--brand-500)",
-                      margin: "0 auto 6px",
-                    }}
-                  />
-                )}
-
-                <AnimatePresence mode="wait">
-                  {weekFetching ? (
-                    <motion.div
-                      key="loading"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      style={{
-                        marginTop: 6,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{
-                          duration: 1,
-                          repeat: Infinity,
-                          ease: "linear",
-                        }}
-                      >
-                        <RefreshCcw size={13} strokeWidth={2.5} />
-                      </motion.div>
-                    </motion.div>
-                  ) : counts.total > 0 ? (
-                    <motion.div
-                      key="counts"
-                      variants={entryListVariants}
-                      initial="hidden"
-                      animate="show"
-                      exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 3,
-                        marginTop: 6,
-                      }}
-                    >
-                      {[
-                        {
-                          count: counts.pending,
-                          label: "pending",
-                          text: "var(--status-pending-text)",
-                          bg: "var(--status-pending-bg)",
-                        },
-                        {
-                          count: counts.approved,
-                          label: "approved",
-                          text: "var(--status-approved-text)",
-                          bg: "var(--status-approved-bg)",
-                        },
-                        {
-                          count: counts.rejected,
-                          label: "rejected",
-                          text: "var(--status-rejected-text)",
-                          bg: "var(--status-rejected-bg)",
-                        },
-                      ].map(
-                        ({ count, label, text, bg }) =>
-                          count > 0 && (
-                            <motion.div
-                              key={label}
-                              variants={entryRowVariants}
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: text,
-                                background: bg,
-                                borderRadius: 999,
-                                padding: "1px 6px",
-                              }}
-                            >
-                              {count} {label}
-                            </motion.div>
-                          ),
-                      )}
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="empty"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text-muted)",
-                        marginTop: 6,
-                      }}
-                    >
-                      No entries
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.button>
-            );
-          })}
+                  <div className="ot-day__hours">
+                    <span>Entries</span>
+                    <strong>{counts.total}</strong>
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
         </motion.div>
       </AnimatePresence>
 
-      {/* Day entries panel */}
+      {/* Day panel */}
       <AnimatePresence mode="wait">
         {selectedDate && (
           <motion.div
             key={selectedDate}
+            className="ot-panel"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8, transition: { duration: 0.15 } }}
             transition={{ duration: 0.22, ease: EASE }}
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-base)",
-              borderRadius: "var(--radius-lg)",
-              padding: 20,
-              boxShadow: "var(--shadow-card)",
-            }}
           >
-            <SectionHeader
-              title={`${getDayOfWeek(selectedDate)}, ${formatDate(selectedDate)}`}
-              sub={`${dayEntries.length} of ${totalEmployees} employees`}
-              icon={CalendarDays}
-              action={
-                canEdit ? (
-                  <button
-                    onClick={() => setAddOpen(true)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      padding: "5px 12px",
-                      borderRadius: "var(--radius-sm)",
-                      border: "1px solid var(--border-base)",
-                      background: "transparent",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      color: "var(--text-secondary)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Plus size={12} /> Add for this day
-                  </button>
-                ) : undefined
-              }
-            />
-
-            {/* Incomplete coverage badge */}
-            <AnimatePresence>
-              {isDayIncomplete && !dayLoading && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6, height: 0 }}
-                  animate={{ opacity: 1, y: 0, height: "auto" }}
-                  exit={{ opacity: 0, y: -6, height: 0 }}
-                  transition={{ duration: 0.2, ease: EASE }}
-                  style={{ overflow: "hidden", marginBottom: 14 }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "9px 14px",
-                      borderRadius: "var(--radius-md)",
-                      background: "var(--status-pending-bg)",
-                      border:
-                        "1px solid var(--status-pending-border, #f59e0b40)",
-                    }}
-                  >
-                    <Users
-                      size={14}
-                      color="var(--status-pending-text)"
-                      strokeWidth={2.5}
-                    />
-                    <span
-                      style={{
-                        fontSize: 12.5,
-                        fontWeight: 700,
-                        color: "var(--status-pending-text)",
-                      }}
-                    >
-                      Incomplete —
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 12.5,
-                        fontWeight: 500,
-                        color: "var(--status-pending-text)",
-                      }}
-                    >
-                      {missingCount} of {totalEmployees} employees missing OT
-                      records
-                    </span>
-                  </div>
-                </motion.div>
+            <div className="ot-panel__head">
+              <div>
+                <div className="ot-panel__title">
+                  <span className="ot-panel__icon">
+                    <CalendarDays size={15} />
+                  </span>
+                  {formatDate(selectedDate)}
+                </div>
+                <div className="ot-panel__sub">
+                  {dayEntries.length} of {totalEmployees || 0} employees ·{" "}
+                  {formatMinutes(dayTotalMinutes)} OT
+                </div>
+              </div>
+              {canEdit && (
+                <button className="ot-btn" onClick={() => setAddOpen(true)}>
+                  <Plus size={13} />
+                  Add for this day
+                </button>
               )}
-            </AnimatePresence>
+            </div>
 
-            {/* Bulk action toolbar */}
+            {isDayIncomplete && !dayLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: -6, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -6, height: 0 }}
+                transition={{ duration: 0.2, ease: EASE }}
+                className="ot-alert"
+              >
+                <Users size={15} />
+                <span>
+                  <strong>Incomplete coverage —</strong> {missingCount} of{" "}
+                  {totalEmployees} employees are missing OT records for this
+                  day.
+                </span>
+              </motion.div>
+            )}
+
+            <div className="ot-stats">
+              <div className="ot-stat">
+                <div className="ot-stat__label">Entries</div>
+                <div className="ot-stat__value">{dayEntries.length}</div>
+                <div className="ot-stat__sub">Records for this day</div>
+              </div>
+              <div className="ot-stat" data-tone="pending">
+                <div className="ot-stat__label">Pending</div>
+                <div className="ot-stat__value">{dayPending}</div>
+                <div className="ot-stat__sub">Awaiting a decision</div>
+              </div>
+              <div className="ot-stat">
+                <div className="ot-stat__label">Total OT</div>
+                <div className="ot-stat__value">
+                  {formatMinutes(dayTotalMinutes)}
+                </div>
+                <div className="ot-stat__sub">Weighted hours</div>
+              </div>
+              <div className="ot-stat">
+                <div className="ot-stat__label">Coverage</div>
+                <div className="ot-stat__value">
+                  {totalEmployees > 0
+                    ? `${dayEntries.length}/${totalEmployees}`
+                    : "—"}
+                </div>
+                <div className="ot-stat__sub">Employees recorded</div>
+              </div>
+            </div>
+
+            <div className="ot-toolbar">
+              <div className="ot-tabs">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    className="ot-tab"
+                    data-active={statusFilter === tab.key}
+                    onClick={() => setStatusFilter(tab.key)}
+                  >
+                    {tab.label}
+                    <span className="ot-tab__count">{tab.count}</span>
+                  </button>
+                ))}
+              </div>
+              <label className="ot-search">
+                <Search size={14} />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search employee or ID"
+                  aria-label="Search entries"
+                />
+              </label>
+            </div>
+
             <AnimatePresence>
               {showBulkToolbar && (
                 <motion.div
@@ -671,175 +565,105 @@ export default function OtEntriesPage() {
                   animate={{ opacity: 1, height: "auto", marginBottom: 12 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                   transition={{ duration: 0.18, ease: EASE }}
-                  style={{ overflow: "hidden" }}
+                  className="ot-bulk"
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "9px 12px",
-                      background: "var(--brand-50)",
-                      border: "1px solid var(--brand-200)",
-                      borderRadius: "var(--radius-md)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        color: "var(--brand-700)",
-                      }}
+                  <span className="ot-bulk__count">
+                    {selectedCount} selected
+                  </span>
+                  <div className="ot-bulk__actions">
+                    <button
+                      className="ot-clear"
+                      onClick={() => dispatchSelection({ type: "CLEAR" })}
                     >
-                      {selectedCount} selected
-                    </div>
-                    <div
-                      style={{ display: "flex", gap: 6, alignItems: "center" }}
+                      Clear
+                    </button>
+                    <button
+                      className="ot-btn"
+                      onClick={() => setBulkAction("reject")}
                     >
-                      <button
-                        onClick={() => dispatchSelection({ type: "CLEAR" })}
-                        style={{
-                          fontSize: 11.5,
-                          color: "var(--text-muted)",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          fontWeight: 500,
-                          padding: "4px 8px",
-                          touchAction: "manipulation",
-                        }}
-                      >
-                        Clear
-                      </button>
-                      <motion.button
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => setBulkAction("reject")}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 5,
-                          padding: "5px 12px",
-                          borderRadius: "var(--radius-sm)",
-                          border: "1px solid var(--status-rejected-border)",
-                          background: "var(--status-rejected-bg)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "var(--status-rejected-text)",
-                          cursor: "pointer",
-                          touchAction: "manipulation",
-                        }}
-                      >
-                        <XCircle size={12} />
-                        Reject {selectedCount}
-                      </motion.button>
-                      <motion.button
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => setBulkAction("approve")}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 5,
-                          padding: "5px 12px",
-                          borderRadius: "var(--radius-sm)",
-                          border: "none",
-                          background: "var(--status-approved-text)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "white",
-                          cursor: "pointer",
-                          touchAction: "manipulation",
-                        }}
-                      >
-                        <CheckCircle2 size={12} />
-                        Approve {selectedCount}
-                      </motion.button>
-                    </div>
+                      <XCircle size={13} />
+                      Reject {selectedCount}
+                    </button>
+                    <button
+                      className="ot-btn"
+                      onClick={() => setBulkAction("approve")}
+                    >
+                      <CheckCircle2 size={13} />
+                      Approve {selectedCount}
+                    </button>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {dayLoading && (
-              <div
-                style={{
-                  padding: "32px 0",
-                  textAlign: "center",
-                  color: "var(--text-muted)",
-                  fontSize: 13,
-                }}
-              >
-                Loading...
+            {dayLoading ? (
+              <div className="ot-list">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="ot-skeleton" />
+                ))}
               </div>
-            )}
-
-            {!dayLoading && dayEntries.length === 0 && (
+            ) : dayEntries.length === 0 ? (
+              <div className="ot-empty">
+                <span className="ot-empty__icon">
+                  <CalendarDays size={20} />
+                </span>
+                <span className="ot-empty__title">No OT entries for this day</span>
+                <span className="ot-empty__sub">
+                  {canEdit
+                    ? "Add an entry to start reviewing overtime for this date."
+                    : "Check back after submissions are recorded."}
+                </span>
+                {canEdit && (
+                  <button
+                    className="ot-btn ot-btn--primary"
+                    onClick={() => setAddOpen(true)}
+                  >
+                    <Plus size={14} />
+                    Add entry
+                  </button>
+                )}
+              </div>
+            ) : visibleEntries.length === 0 ? (
+              <div className="ot-empty">
+                <span className="ot-empty__icon">
+                  <Search size={20} />
+                </span>
+                <span className="ot-empty__title">No matching entries</span>
+                <span className="ot-empty__sub">
+                  Try a different status or search term.
+                </span>
+              </div>
+            ) : (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.2 }}
-                style={{
-                  padding: "32px 0",
-                  textAlign: "center",
-                  color: "var(--text-muted)",
-                  fontSize: 13,
-                }}
-              >
-                No OT entries for this day
-              </motion.div>
-            )}
-
-            {!dayLoading && dayEntries.length > 0 && (
-              <motion.div
+                className="ot-list"
                 variants={entryListVariants}
                 initial="hidden"
                 animate="show"
-                style={{ display: "flex", flexDirection: "column", gap: 8 }}
               >
                 {canApprove && pendingEntries.length > 1 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "4px 2px",
-                    }}
+                  <button
+                    className="ot-select-all"
+                    onClick={() =>
+                      allPendingSelected
+                        ? dispatchSelection({ type: "CLEAR" })
+                        : dispatchSelection({
+                            type: "SELECT_ALL",
+                            ids: pendingIds,
+                          })
+                    }
                   >
-                    <button
-                      onClick={() =>
-                        allPendingSelected
-                          ? dispatchSelection({ type: "CLEAR" })
-                          : dispatchSelection({
-                              type: "SELECT_ALL",
-                              ids: pendingIds,
-                            })
-                      }
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        color: "var(--text-muted)",
-                        fontWeight: 500,
-                        padding: "4px 0",
-                        touchAction: "manipulation",
-                      }}
-                    >
-                      {allPendingSelected ? (
-                        <CheckSquare size={13} color="var(--brand-500)" />
-                      ) : (
-                        <Square size={13} />
-                      )}
-                      {allPendingSelected
-                        ? "Deselect all"
-                        : "Select all pending"}
-                    </button>
-                  </div>
+                    {allPendingSelected ? (
+                      <CheckSquare size={14} color="var(--brand-500)" />
+                    ) : (
+                      <Square size={14} />
+                    )}
+                    {allPendingSelected
+                      ? "Deselect all pending"
+                      : "Select all pending"}
+                  </button>
                 )}
 
-                {dayEntries.map((entry) => {
+                {visibleEntries.map((entry) => {
                   const isPending = entry.status === "PENDING";
                   const isSelected = selectedIds.has(entry.id);
 
@@ -847,260 +671,158 @@ export default function OtEntriesPage() {
                     <motion.div
                       key={entry.id}
                       layout
+                      className="ot-entry"
+                      data-selected={isSelected}
                       variants={entryRowVariants}
                       exit={{
                         opacity: 0,
                         x: -6,
                         transition: { duration: 0.15 },
                       }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "12px 14px",
-                        border: `1px solid ${isSelected ? "var(--brand-300)" : "var(--border-base)"}`,
-                        borderRadius: "var(--radius-md)",
-                        background: isSelected
-                          ? "var(--brand-50)"
-                          : "var(--bg-base)",
-                        gap: 12,
-                        transition:
-                          "border-color 0.15s ease, background 0.15s ease",
-                      }}
                     >
                       {canApprove && isPending && (
                         <button
+                          className="ot-entry__check"
+                          data-checked={isSelected}
                           onClick={() =>
                             dispatchSelection({ type: "TOGGLE", id: entry.id })
                           }
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            flexShrink: 0,
-                            color: isSelected
-                              ? "var(--brand-500)"
-                              : "var(--text-muted)",
-                            touchAction: "manipulation",
-                          }}
+                          aria-label={
+                            isSelected ? "Deselect entry" : "Select entry"
+                          }
                         >
                           {isSelected ? (
-                            <CheckSquare size={15} />
+                            <CheckSquare size={16} />
                           ) : (
-                            <Square size={15} />
+                            <Square size={16} />
                           )}
                         </button>
                       )}
 
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          minWidth: 0,
-                          flex: 1,
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: "var(--radius-sm)",
-                            background: "var(--brand-50)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            color: "var(--brand-600)",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {entry.employee.empId}
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontSize: 13.5,
-                              fontWeight: 600,
-                              color: "var(--text-primary)",
-                            }}
-                          >
-                            {entry.employee.name}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 11.5,
-                              color: "var(--text-muted)",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                            }}
-                          >
-                            <span>{entry.shift}</span>
-                            {entry.inTime && (
-                              <>
-                                · <Clock size={10} /> {entry.inTime} –{" "}
-                                {entry.outTime}
-                              </>
-                            )}
-                            {entry.isNight && (
-                              <Moon size={10} color="var(--brand-400)" />
-                            )}
-                            {entry.manualOverride && (
-                              <span
-                                style={{
-                                  color: "var(--status-pending-text)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 2,
-                                }}
-                              >
-                                <AlertTriangle size={10} /> manual
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <span className="ot-entry__avatar">
+                        {entry.employee.empId}
+                      </span>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          flexShrink: 0,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        {[
-                          {
-                            label: "Normal",
-                            value: entry.normalMinutes,
-                            bg: "var(--brand-50)",
-                            color: "var(--brand-600)",
-                            border: "var(--brand-200)",
-                          },
-                          {
-                            label: "Double",
-                            value: entry.doubleMinutes,
-                            bg: "rgba(245, 158, 11, 0.12)",
-                            color: "#b45309",
-                            border: "rgba(245, 158, 11, 0.25)",
-                          },
-                          {
-                            label: "Triple",
-                            value: entry.tripleMinutes,
-                            bg: "rgba(239, 68, 68, 0.12)",
-                            color: "#b91c1c",
-                            border: "rgba(239, 68, 68, 0.25)",
-                          },
-                        ].map(({ label, value, bg, color, border }) =>
-                          value > 0 ? (
-                            <div
-                              key={label}
+                      <div className="ot-entry__main">
+                        <div className="ot-entry__name-row">
+                          <span className="ot-entry__name">
+                            {entry.employee.name}
+                          </span>
+                          <StatusBadge status={entry.status} />
+                        </div>
+                        <div className="ot-entry__meta">
+                          <span>{entry.shift}</span>
+                          {entry.inTime && (
+                            <>
+                              <span>·</span>
+                              <Clock size={11} />
+                              <span>
+                                {entry.inTime} – {entry.outTime}
+                              </span>
+                            </>
+                          )}
+                          {entry.isNight && (
+                            <span className="ot-entry__flag" title="Night shift">
+                              <Moon size={11} /> night
+                            </span>
+                          )}
+                          {entry.manualOverride && (
+                            <span
+                              className="ot-entry__flag"
+                              title="Manually overridden"
+                            >
+                              <AlertTriangle size={11} /> manual
+                            </span>
+                          )}
+                          {entry.reason && (
+                            <span
+                              title={entry.reason}
                               style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 6,
-                                padding: "4px 10px",
-                                borderRadius: 999,
-                                background: bg,
-                                border: `1px solid ${border}`,
+                                maxWidth: 180,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              <span
-                                style={{
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  color,
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.4px",
-                                }}
-                              >
-                                {label}
-                              </span>
-                              <div
-                                style={{
-                                  width: 1,
-                                  height: 12,
-                                  background: border,
-                                }}
-                              />
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  color: "var(--text-primary)",
-                                }}
-                              >
+                              · {entry.reason}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="ot-entry__breakdown">
+                        {[
+                          {
+                            label: "Normal",
+                            kind: "normal",
+                            value: entry.normalMinutes,
+                          },
+                          {
+                            label: "Double",
+                            kind: "double",
+                            value: entry.doubleMinutes,
+                          },
+                          {
+                            label: "Triple",
+                            kind: "triple",
+                            value: entry.tripleMinutes,
+                          },
+                        ].map(({ label, kind, value }) =>
+                          value > 0 ? (
+                            <span
+                              key={kind}
+                              className="ot-chip"
+                              data-kind={kind}
+                            >
+                              <span className="ot-chip__label">{label}</span>
+                              <span className="ot-chip__value">
                                 {formatMinutes(value)}
                               </span>
-                            </div>
+                            </span>
                           ) : null,
                         )}
                       </div>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <StatusBadge status={entry.status} iconWithText />
+                      <div className="ot-entry__total">
+                        <span className="ot-entry__total-label">Total</span>
+                        <span className="ot-entry__total-value">
+                          {formatMinutes(entryTotalMinutes(entry))}
+                        </span>
+                      </div>
 
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                            padding: "3px",
-                            borderRadius: 999,
-                            background: "var(--bg-muted)",
-                            border: "1px solid var(--border-base)",
-                          }}
-                        >
-                          {canApprove && entry.status === "PENDING" && (
-                            <>
-                              <ActionBtn
-                                icon={CheckCircle2}
-                                color="var(--status-approved-text)"
-                                bg="var(--status-approved-bg)"
-                                title="Approve"
-                                onClick={() => setApproveEntry(entry)}
-                              />
-                              <ActionBtn
-                                icon={XCircle}
-                                color="var(--status-rejected-text)"
-                                bg="var(--status-rejected-bg)"
-                                title="Reject"
-                                onClick={() => setRejectEntry(entry)}
-                              />
-                            </>
-                          )}
-
-                          {canEdit && (
-                            <>
-                              <ActionBtn
-                                icon={Pencil}
-                                color="var(--brand-600)"
-                                bg="var(--brand-50)"
-                                title="Edit"
-                                onClick={() => setEditEntry(entry)}
-                              />
-                              <ActionBtn
-                                icon={Trash2}
-                                color="var(--status-rejected-text)"
-                                bg="var(--status-rejected-bg)"
-                                title="Delete"
-                                onClick={() => handleDelete(entry.id)}
-                              />
-                            </>
-                          )}
-                        </div>
+                      <div className="ot-entry__actions">
+                        {canApprove && isPending && (
+                          <>
+                            <ActionBtn
+                              icon={CheckCircle2}
+                              label="Approve"
+                              tone="approve"
+                              onClick={() => setApproveEntry(entry)}
+                            />
+                            <ActionBtn
+                              icon={XCircle}
+                              label="Reject"
+                              tone="reject"
+                              onClick={() => setRejectEntry(entry)}
+                            />
+                          </>
+                        )}
+                        {canEdit && (
+                          <>
+                            <ActionBtn
+                              icon={Pencil}
+                              label="Edit"
+                              tone="edit"
+                              onClick={() => setEditEntry(entry)}
+                            />
+                            <ActionBtn
+                              icon={Trash2}
+                              label="Delete"
+                              tone="delete"
+                              onClick={() => handleDelete(entry.id)}
+                            />
+                          </>
+                        )}
                       </div>
                     </motion.div>
                   );
@@ -1150,45 +872,25 @@ export default function OtEntriesPage() {
 
 function ActionBtn({
   icon: Icon,
-  color,
-  bg,
-  title,
+  label,
+  tone,
   onClick,
 }: {
-  icon: any;
-  color: string;
-  bg: string;
-  title: string;
+  icon: LucideIcon;
+  label: string;
+  tone: "approve" | "reject" | "edit" | "delete";
   onClick: () => void;
 }) {
   return (
     <button
+      className="ot-action"
+      data-tone={tone}
       onClick={onClick}
-      title={title}
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: "var(--radius-sm)",
-        border: "1px solid transparent",
-        background: "transparent",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        color,
-        transition: "background 0.15s ease, border-color 0.15s ease",
-        touchAction: "manipulation",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.background = bg;
-        (e.currentTarget as HTMLElement).style.borderColor = color + "40";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.background = "transparent";
-        (e.currentTarget as HTMLElement).style.borderColor = "transparent";
-      }}
+      title={label}
+      aria-label={label}
     >
-      <Icon size={13} strokeWidth={2} />
+      <Icon size={14} strokeWidth={2} />
+      <span className="ot-action__label">{label}</span>
     </button>
   );
 }

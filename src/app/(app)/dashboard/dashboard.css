@@ -127,15 +127,6 @@
   box-shadow: var(--shadow-card);
 }
 
-.dash-priority::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-}
-
 .dash-priority--clear {
   border-color: var(--status-approved-border);
   background: linear-gradient(

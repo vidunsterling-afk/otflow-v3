@@ -8,6 +8,14 @@
   margin-left: var(--sidebar-w);
 }
 
+/* No topbar: content starts at the top of the shell */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  overflow-y: auto;
+}
+
 /* ------------------------------------------------------------------ */
 /* Sidebar                                                             */
 /* ------------------------------------------------------------------ */
@@ -209,6 +217,36 @@
   display: flex;
 }
 
+/* ---------------- Session status ---------------- */
+
+.sidebar-session {
+  flex: none;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-base);
+}
+
+.sidebar-session__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-session__icon {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.sidebar-session__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* ---------------- User profile + logout ---------------- */
 
 .sidebar-user {
@@ -343,26 +381,43 @@
     backdrop-filter: blur(2px);
   }
 
+  .app-main {
+    padding: 20px 16px 92px;
+  }
+
   .sidebar-hamburger {
     display: flex;
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    z-index: 45;
     flex: none;
-    width: 38px;
-    height: 38px;
+    width: 46px;
+    height: 46px;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--border-base);
-    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
     background: var(--bg-card);
-    color: var(--text-secondary);
+    color: var(--brand-600);
+    box-shadow: var(--shadow-dropdown);
     cursor: pointer;
     transition:
       background 0.15s,
-      color 0.15s;
+      color 0.15s,
+      opacity 0.2s,
+      transform 0.2s;
   }
 
   .sidebar-hamburger:hover {
-    background: var(--bg-muted);
-    color: var(--text-primary);
+    background: var(--brand-500);
+    color: #fff;
+  }
+
+  .sidebar-hamburger[data-open="true"] {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.9);
   }
 }
 

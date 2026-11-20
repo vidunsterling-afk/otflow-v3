@@ -49,7 +49,7 @@ src/
 │   ├── login/
 │   └── api/                    # All API routes
 ├── components/
-│   ├── layout/                 # Sidebar, Topbar, SessionCountdown, NotificationBell
+│   ├── layout/                 # Sidebar, AppShell, SessionCountdown
 │   ├── ot/                     # OT entry modals (add, edit, approve, reject)
 │   ├── admin/                  # Shared admin table, page header, buttons
 │   └── ui/                     # Modal, FormField, Input, StatusBadge, etc.

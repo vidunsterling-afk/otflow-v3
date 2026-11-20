@@ -12,6 +12,7 @@ interface ModalProps {
   children: React.ReactNode;
   width?: number;
   headerContent?: React.ReactNode;
+  footer?: React.ReactNode;
   closeOnBackdropClick?: boolean;
 }
 
@@ -23,6 +24,7 @@ export function Modal({
   children,
   width = 520,
   headerContent,
+  footer,
   closeOnBackdropClick = true,
 }: ModalProps) {
   useEffect(() => {
@@ -162,6 +164,24 @@ export function Modal({
             >
               {children}
             </div>
+
+            {/* Footer — never scrolls with the body */}
+            {footer && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  gap: 8,
+                  padding: "14px 24px",
+                  borderTop: "1px solid var(--border-base)",
+                  background: "var(--bg-card)",
+                  flexShrink: 0,
+                }}
+              >
+                {footer}
+              </div>
+            )}
           </motion.div>
         </div>
       )}

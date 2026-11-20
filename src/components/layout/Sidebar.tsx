@@ -18,6 +18,7 @@ import {
   LogOut,
   ScanLine,
   Loader2,
+  Menu,
   X,
 } from "lucide-react";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -25,6 +26,7 @@ import { useEffect, useState } from "react";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useSidebarStore } from "@/lib/sidebar-store";
 import { Modal } from "@/components/ui/Modal";
+import { SessionCountdown } from "@/components/layout/SessionCountdown";
 import "./sidebar.css";
 
 const NAV_ITEMS = [
@@ -179,7 +181,7 @@ interface SidebarProps {
 export function Sidebar({ permissions, user }: SidebarProps) {
   const { logo, companyName, isLoading } = useCompanySettings();
   const pathname = usePathname();
-  const { mobileOpen, closeMobile } = useSidebarStore();
+  const { mobileOpen, toggleMobile, closeMobile } = useSidebarStore();
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const displayName = user.username ?? user.name ?? "User";
@@ -200,6 +202,15 @@ export function Sidebar({ permissions, user }: SidebarProps) {
 
   return (
     <>
+      <button
+        className="sidebar-hamburger"
+        data-open={mobileOpen}
+        onClick={toggleMobile}
+        aria-label="Open navigation"
+      >
+        <Menu size={19} />
+      </button>
+
       <div
         className="sidebar-backdrop"
         data-open={mobileOpen}
@@ -245,6 +256,15 @@ export function Sidebar({ permissions, user }: SidebarProps) {
             />
           ))}
         </nav>
+
+        {/* Session status — stays mounted so warnings and auto sign-out keep working */}
+        <div className="sidebar-session">
+          <div className="sidebar-session__row">
+            <Shield size={13} className="sidebar-session__icon" />
+            <span className="sidebar-session__label">Session</span>
+            <SessionCountdown pill />
+          </div>
+        </div>
 
         {/* User profile + logout — styled like the rest of the sidebar */}
         <div className="sidebar-user">
