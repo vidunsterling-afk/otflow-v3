@@ -23,13 +23,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         {children}
         <Toaster
-          position="top-center"
+          position="bottom-right"
           toastOptions={{
-            classNames: {
-              toast: "text-center justify-center",
-              title: "text-center w-full",
-              description: "text-center w-full",
-            },
             style: {
               background: "var(--bg-card)",
               border: "1px solid var(--border-base)",

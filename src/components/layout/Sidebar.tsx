@@ -1,10 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   Clock,
@@ -15,15 +14,16 @@ import {
   UserCog,
   Settings,
   MessageSquare,
-  ChevronDown,
   Database,
   ScanLine,
   Loader2,
+  X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useState, useEffect } from "react";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { useSidebarStore } from "@/lib/sidebar-store";
+import "./sidebar.css";
 
 const NAV_ITEMS = [
   {
@@ -141,60 +141,20 @@ function DevMigrationButton() {
   }
 
   return (
-    <div
-      style={{
-        padding: "10px 12px",
-        borderTop: "1px solid var(--border-base)",
-      }}
-    >
+    <div className="sidebar-dev">
       {state === "idle" ? (
         <motion.button
+          className="sidebar-dev-btn"
           onClick={handleClick}
-          title="Developer Migration Tool"
-          whileHover={{
-            borderColor: "var(--brand-300)",
-            color: "var(--brand-500)",
-          }}
           whileTap={{ scale: 0.97 }}
           transition={{ duration: 0.15 }}
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "none",
-            border: "1px dashed var(--border-base)",
-            borderRadius: "var(--radius-sm)",
-            padding: "7px 10px",
-            cursor: "pointer",
-            color: "var(--text-muted)",
-            fontSize: 12,
-          }}
         >
-          <Database size={13} strokeWidth={1.8} />
+          <Database size={14} strokeWidth={1.8} />
           Migration Tool
         </motion.button>
       ) : (
-        <div
-          style={{
-            background: "var(--bg-card)",
-            border: `1px solid ${error ? "var(--red-300, #fca5a5)" : "var(--border-base)"}`,
-            borderRadius: "var(--radius-sm)",
-            padding: "8px 10px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--text-muted)",
-              fontWeight: 500,
-            }}
-          >
-            Dev password
-          </div>
+        <div className="sidebar-dev-panel" data-error={error}>
+          <div className="sidebar-dev-label">Dev password</div>
           <input
             autoFocus
             type="password"
@@ -205,56 +165,25 @@ function DevMigrationButton() {
             }}
             onKeyDown={handleKeyDown}
             placeholder="Enter password..."
-            style={{
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontSize: 12,
-              color: "var(--text-primary)",
-              width: "100%",
-            }}
+            className="sidebar-dev-input"
+            aria-label="Developer migration password"
           />
-          {error && (
-            <div style={{ fontSize: 11, color: "var(--red-500, #ef4444)" }}>
-              Incorrect password
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+          {error && <div className="sidebar-dev-error">Incorrect password</div>}
+          <div className="sidebar-dev-actions">
             <motion.button
+              className="sidebar-dev-submit"
               onClick={handleSubmit}
-              whileHover={{ opacity: 0.9 }}
               whileTap={{ scale: 0.96 }}
-              style={{
-                flex: 1,
-                background: "var(--brand-500)",
-                color: "white",
-                border: "none",
-                borderRadius: "var(--radius-xs, 4px)",
-                padding: "4px 0",
-                fontSize: 11,
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
             >
               Enter
             </motion.button>
             <motion.button
+              className="sidebar-dev-cancel"
               onClick={() => {
                 setState("idle");
                 setError(false);
               }}
-              whileHover={{ opacity: 0.85 }}
               whileTap={{ scale: 0.96 }}
-              style={{
-                flex: 1,
-                background: "var(--bg-hover, #f1f5f9)",
-                color: "var(--text-secondary)",
-                border: "none",
-                borderRadius: "var(--radius-xs, 4px)",
-                padding: "4px 0",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
             >
               Cancel
             </motion.button>
@@ -269,26 +198,11 @@ function NavGroup({
   group,
   permissions,
   pathname,
-  defaultOpen,
 }: {
   group: (typeof NAV_ITEMS)[0];
   permissions: string[];
   pathname: string;
-  defaultOpen: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  // Is any item in this group the active route?
-  const hasActive = group.items.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + "/"),
-  );
-
-  // Force the group open whenever its active route changes into view,
-  // even if the user had manually collapsed it.
-  useEffect(() => {
-    if (hasActive) setOpen(true);
-  }, [hasActive]);
-
   const visibleItems = group.items.filter(
     (item) => !item.permission || permissions.includes(item.permission),
   );
@@ -296,126 +210,43 @@ function NavGroup({
   if (visibleItems.length === 0) return null;
 
   return (
-    <div style={{ marginBottom: 4 }}>
-      {/* Group header */}
-      <motion.button
-        onClick={() => setOpen((v) => !v)}
-        whileHover={{ backgroundColor: "var(--bg-hover, #f1f5f9)" }}
-        whileTap={{ scale: 0.98 }}
-        transition={{ duration: 0.15 }}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          padding: "6px 10px",
-          borderRadius: "var(--radius-sm)",
-          marginBottom: 2,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            color: "var(--text-muted)",
-            letterSpacing: "0.8px",
-            textTransform: "uppercase",
-          }}
-        >
-          {group.label}
-        </span>
-        <motion.div
-          animate={{ rotate: open ? 0 : -90 }}
-          transition={{ duration: 0.2 }}
-        >
-          <ChevronDown size={12} color="var(--text-muted)" />
-        </motion.div>
-      </motion.button>
+    <div className="sidebar-group">
+      <div className="sidebar-group__label">{group.label}</div>
+      {visibleItems.map((item) => {
+        const active =
+          pathname === item.href || pathname.startsWith(item.href + "/");
+        const Icon = item.icon;
 
-      {/* Items */}
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            style={{ overflow: "hidden" }}
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="sidebar-link"
+            data-active={active}
+            aria-current={active ? "page" : undefined}
           >
-            {visibleItems.map((item) => {
-              const active =
-                pathname === item.href || pathname.startsWith(item.href + "/");
-              const Icon = item.icon;
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  style={{ textDecoration: "none" }}
-                >
-                  <motion.div
-                    style={{ position: "relative", marginBottom: 2 }}
-                    whileHover={!active ? { x: 2 } : undefined}
-                    transition={{ duration: 0.15 }}
-                  >
-                    {active && (
-                      <motion.div
-                        layoutId="sidebar-active"
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          background: "var(--brand-50)",
-                          borderRadius: "var(--radius-sm)",
-                          border: "1px solid var(--brand-100)",
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 400,
-                          damping: 35,
-                        }}
-                      />
-                    )}
-                    <motion.div
-                      whileHover={
-                        !active
-                          ? { backgroundColor: "var(--bg-hover, #f1f5f9)" }
-                          : undefined
-                      }
-                      transition={{ duration: 0.15 }}
-                      style={{
-                        position: "relative",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "8px 10px",
-                        borderRadius: "var(--radius-sm)",
-                        color: active
-                          ? "var(--brand-600)"
-                          : "var(--text-secondary)",
-                        fontWeight: active ? 600 : 400,
-                        fontSize: 13.5,
-                      }}
-                      className={cn(!active && "hover:text-(--text-primary)")}
-                    >
-                      <motion.span
-                        whileHover={{ scale: 1.12 }}
-                        transition={{ duration: 0.15 }}
-                        style={{ display: "flex" }}
-                      >
-                        <Icon size={15} strokeWidth={active ? 2.2 : 1.8} />
-                      </motion.span>
-                      {item.label}
-                    </motion.div>
-                  </motion.div>
-                </Link>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {active && (
+              <motion.span
+                layoutId="sidebar-active"
+                className="sidebar-link__bg"
+                transition={{
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 35,
+                }}
+              />
+            )}
+            <motion.span
+              className="sidebar-link__icon"
+              whileHover={{ scale: 1.1 }}
+              transition={{ duration: 0.15 }}
+            >
+              <Icon size={16} strokeWidth={active ? 2.2 : 1.8} />
+            </motion.span>
+            <span className="sidebar-link__label">{item.label}</span>
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -423,107 +254,78 @@ function NavGroup({
 export function Sidebar({ permissions }: { permissions: string[] }) {
   const { logo, companyName, isLoading } = useCompanySettings();
   const pathname = usePathname();
+  const { mobileOpen, closeMobile } = useSidebarStore();
+
+  useEffect(() => {
+    closeMobile();
+  }, [pathname, closeMobile]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMobile();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileOpen, closeMobile]);
 
   return (
-    <aside
-      style={{
-        width: "var(--sidebar-w)",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        height: "100vh",
-        background: "var(--bg-sidebar)",
-        borderRight: "1px solid var(--border-base)",
-        display: "flex",
-        flexDirection: "column",
-        zIndex: 40,
-      }}
-    >
-      {/* Logo */}
+    <>
       <div
-        style={{
-          padding: "20px 20px 16px",
-          borderBottom: "1px solid var(--border-base)",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-        }}
+        className="sidebar-backdrop"
+        data-open={mobileOpen}
+        onClick={closeMobile}
+        aria-hidden="true"
+      />
+
+      <aside
+        className="sidebar"
+        data-mobile-open={mobileOpen}
+        aria-label="Main navigation"
       >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "var(--radius-md)",
-            background: logo ? "white" : "var(--brand-500)",
-            border: logo ? "1px solid var(--border-base)" : "none",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {isLoading ? (
-              <Loader2 size={18} color="white" className="animate-spin" />
+        <div className="sidebar-header">
+          <div className="sidebar-logo" data-has-logo={Boolean(logo)}>
+            {isLoading ? (
+              <Loader2 size={18} color="#fff" className="animate-spin" />
             ) : logo ? (
-              <img
-                src={logo}
-                alt={companyName}
-                style={{ height: 28, maxWidth: 34, objectFit: "contain" }}
-              />
+              <img src={logo} alt={companyName || "Company logo"} />
             ) : (
-              <Clock size={18} color="white" fill="white" />
+              <Clock size={19} color="#fff" fill="#fff" />
             )}
-        </div>
-        <div>
-          <div
-            style={{
-              fontWeight: 700,
-              fontSize: 15,
-              color: "var(--text-primary)",
-              letterSpacing: "-0.3px",
-            }}
-          >
-            OTFlow
           </div>
-          <div
-            style={{
-              fontSize: 10,
-              color: "var(--text-muted)",
-              letterSpacing: "0.5px",
-              textTransform: "uppercase",
-            }}
-          >
-            Overtime Management
+          <div className="sidebar-brand">
+            <div className="sidebar-brand__name">OTFlow</div>
+            <div className="sidebar-brand__sub">Overtime Management</div>
           </div>
+          <button
+            className="sidebar-mobile-close"
+            onClick={closeMobile}
+            aria-label="Close navigation"
+          >
+            <X size={16} />
+          </button>
         </div>
-      </div>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, overflowY: "auto", padding: "12px 10px" }}>
-        {NAV_ITEMS.map((group, i) => (
-          <NavGroup
-            key={group.label}
-            group={group}
-            permissions={permissions}
-            pathname={pathname}
-            defaultOpen={i === 0} // Overview open by default
-          />
-        ))}
-      </nav>
+        <nav className="sidebar-nav">
+          {NAV_ITEMS.map((group) => (
+            <NavGroup
+              key={group.label}
+              group={group}
+              permissions={permissions}
+              pathname={pathname}
+            />
+          ))}
+        </nav>
 
-      {/* Dev Migration Tool */}
-      <DevMigrationButton />
+        <DevMigrationButton />
 
-      {/* Footer */}
-      <div
-        style={{
-          padding: "10px 20px",
-          borderTop: "1px solid var(--border-base)",
-          fontSize: 11,
-          color: "var(--text-muted)",
-        }}
-      >
-        OTFlow V3 · 2025
-      </div>
-    </aside>
+        <div className="sidebar-footer">
+          <span>OTFlow V3</span>
+          <span className="sidebar-footer__version">
+            © {new Date().getFullYear()}
+          </span>
+        </div>
+      </aside>
+    </>
   );
 }

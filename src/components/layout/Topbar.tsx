@@ -1,10 +1,11 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { UserIcon } from "lucide-react";
+import { Menu, UserIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SessionCountdown } from "@/components/layout/SessionCountdown";
+import { useSidebarStore } from "@/lib/sidebar-store";
 // import { NotificationBell } from "@/components/layout/NotificationBell";
 import { TimePill } from "../ui/time-pill";
 import { AnimateIcon } from "../animate-ui/icons/icon";
@@ -28,6 +29,7 @@ export function Topbar({ user }: TopbarProps) {
   const [confirming, setConfirming] = useState(false);
   const [hovered, setHovered] = useState(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toggleMobile = useSidebarStore((state) => state.toggleMobile);
 
   const clearResetTimer = () => {
     if (resetTimer.current) {
@@ -79,8 +81,15 @@ export function Topbar({ user }: TopbarProps) {
         zIndex: 30,
       }}
     >
-      {/* Left — time */}
+      {/* Left — mobile menu + time */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button
+          className="sidebar-hamburger"
+          onClick={toggleMobile}
+          aria-label="Open navigation"
+        >
+          <Menu size={18} />
+        </button>
         <TimePill />
       </div>
 

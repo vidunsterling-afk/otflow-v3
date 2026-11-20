@@ -5,16 +5,30 @@ import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Eye,
+  EyeOff,
+  Info,
+  Loader2,
+  Lock,
+  User,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import "./login.css";
 
 function LoginPageInner() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const { logo, companyName, isLoading } = useCompanySettings();
 
@@ -24,6 +38,7 @@ function LoginPageInner() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       const res = await signIn("credentials", {
@@ -35,20 +50,24 @@ function LoginPageInner() {
       if (res?.error) {
         console.error("Login error:", res.error);
         if (res.error === "account_disabled") {
-          toast.error(
-            "Account rejected (disabled). Contact your administrator.",
-          );
+          const message =
+            "Account rejected (disabled). Contact your administrator.";
+          setError(message);
+          toast.error(message);
         } else {
+          setError("Invalid username or password.");
           toast.error("Invalid username or password.");
         }
       } else if (res?.ok) {
         toast.success("Login successful.");
         router.push("/dashboard");
       } else {
+        setError("Something went wrong. Please try again.");
         toast.error("Something went wrong. Please try again.");
       }
     } catch (err) {
       console.error("Sign in error:", err);
+      setError("Something went wrong. Please try again.");
       toast.error("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
@@ -56,275 +75,210 @@ function LoginPageInner() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "var(--bg-base)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-      }}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        style={{
-          width: "100%",
-          maxWidth: 380,
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-base)",
-          borderRadius: "var(--radius-xl)",
-          padding: 32,
-          boxShadow: "var(--shadow-modal)",
-        }}
-      >
-        {/* Logo */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 28,
-          }}
+    <div className="login-shell">
+      {/* ---------------- Brand panel ---------------- */}
+      <div className="login-brand">
+        <div className="login-brand__grid" aria-hidden="true" />
+        <div className="login-brand__glow" aria-hidden="true" />
+        <div className="login-brand__glow login-brand__glow--alt" aria-hidden="true" />
+
+        <svg
+          className="login-brand__clock"
+          width="440"
+          height="440"
+          viewBox="0 0 440 440"
+          fill="none"
+          aria-hidden="true"
         >
-          <div
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: "var(--radius-md)",
-              background: logo ? "white" : "var(--brand-500)",
-              border: logo ? "1px solid var(--border-base)" : "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-            }}
+          <circle cx="220" cy="220" r="190" stroke="currentColor" strokeOpacity="0.35" />
+          <circle cx="220" cy="220" r="150" stroke="currentColor" strokeOpacity="0.18" />
+          <motion.g
+            animate={{ rotate: 360 }}
+            transition={{ duration: 90, repeat: Infinity, ease: "linear" }}
+            style={{ transformOrigin: "220px 220px" }}
           >
+            <circle
+              cx="220"
+              cy="220"
+              r="170"
+              stroke="currentColor"
+              strokeOpacity="0.45"
+              strokeDasharray="2 12"
+              strokeLinecap="round"
+            />
+          </motion.g>
+          <path d="M220 220 L220 112" stroke="currentColor" strokeOpacity="0.5" strokeWidth="2" strokeLinecap="round" />
+          <path d="M220 220 L292 256" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="220" cy="220" r="5" fill="currentColor" fillOpacity="0.6" />
+        </svg>
+
+        <div className="login-brand__logo">
+          <div className="login-logo-mark">
             {isLoading ? (
-              <Loader2 size={18} color="white" className="animate-spin" />
+              <Loader2 size={20} color="#fff" className="animate-spin" />
             ) : logo ? (
-              <img
-                src={logo}
-                alt={companyName}
-                style={{ height: 28, maxWidth: 34, objectFit: "contain" }}
-              />
+              <img src={logo} alt={companyName || "Company logo"} />
             ) : (
-              <Clock size={18} color="white" fill="white" />
+              <Clock size={22} color="#fff" fill="#fff" />
             )}
           </div>
           <div>
-            <div
-              style={{
-                fontWeight: 700,
-                fontSize: 17,
-                letterSpacing: "-0.4px",
-                color: "var(--text-primary)",
-              }}
-            >
-              OTFlow
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              Overtime Management
-            </div>
+            <div className="login-brand__title">OTFlow</div>
+            <div className="login-brand__subtitle">Overtime Management</div>
           </div>
         </div>
 
-        <div style={{ marginBottom: 24 }}>
-          <div
-            style={{
-              fontWeight: 700,
-              fontSize: 20,
-              color: "var(--text-primary)",
-              letterSpacing: "-0.4px",
-            }}
-          >
-            Welcome back
-          </div>
-          <div
-            style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}
-          >
-            Sign in to your account
-          </div>
+        <div className="login-brand__mobile-tagline">
+          Overtime, made simple. Track, approve and report in one place.
         </div>
 
-        {passwordChanged && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{
-              padding: "9px 12px",
-              marginBottom: 4,
-              borderRadius: "var(--radius-md)",
-              background: "var(--status-approved-bg)",
-              border: "1px solid var(--status-approved-border)",
-              fontSize: 12.5,
-              color: "var(--status-approved-text)",
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              fontWeight: 500,
-            }}
-          >
-            <CheckCircle2 size={13} />
-            Password changed successfully — sign in with your new password
-          </motion.div>
-        )}
+        <div className="login-brand__body">
+          <h2 className="login-headline">
+            Overtime,
+            <br />
+            <span>made simple.</span>
+          </h2>
+          <p className="login-lede">
+            One place for your team to log overtime, managers to make decisions,
+            and HR to turn it all into clean, payroll-ready reports.
+          </p>
+        </div>
 
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: 14 }}
+        <div className="login-brand__footer">
+          <div className="login-brand__footer-line" />
+          <div className="login-brand__footer-company">
+            {companyName || "Overtime Management"}
+          </div>
+          <div className="login-brand__footer-credit">
+            Developed by Vidun Hettiarachchi · © {new Date().getFullYear()}
+          </div>
+        </div>
+      </div>
+
+      {/* ---------------- Form panel ---------------- */}
+      <div className="login-form-panel">
+        <motion.div
+          className="login-card"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
         >
-          <div>
-            <label
-              style={{
-                fontSize: 12.5,
-                fontWeight: 500,
-                color: "var(--text-secondary)",
-                display: "block",
-                marginBottom: 5,
-              }}
-            >
-              Username
-            </label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
-              required
-              style={{
-                width: "100%",
-                padding: "9px 12px",
-                border: "1px solid var(--border-base)",
-                borderRadius: "var(--radius-md)",
-                fontSize: 13.5,
-                color: "var(--text-primary)",
-                background: "var(--bg-base)",
-                outline: "none",
-                transition: "border-color 0.15s",
-              }}
-              onFocus={(e) => (e.target.style.borderColor = "var(--brand-400)")}
-              onBlur={(e) =>
-                (e.target.style.borderColor = "var(--border-base)")
-              }
-            />
-          </div>
+          <h1 className="login-title">Welcome back</h1>
+          <p className="login-subtitle">
+            Sign in to your account to continue to your workspace.
+          </p>
 
-          <div>
-            <label
-              style={{
-                fontSize: 12.5,
-                fontWeight: 500,
-                color: "var(--text-secondary)",
-                display: "block",
-                marginBottom: 5,
-              }}
+          {passwordChanged && (
+            <motion.div
+              className="login-notice"
+              role="status"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
             >
-              Password
-            </label>
-            <div style={{ position: "relative" }}>
-              <input
-                type={showPass ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-                required
-                style={{
-                  width: "100%",
-                  padding: "9px 38px 9px 12px",
-                  border: "1px solid var(--border-base)",
-                  borderRadius: "var(--radius-md)",
-                  fontSize: 13.5,
-                  color: "var(--text-primary)",
-                  background: "var(--bg-base)",
-                  outline: "none",
-                  transition: "border-color 0.15s",
-                }}
-                onFocus={(e) =>
-                  (e.target.style.borderColor = "var(--brand-400)")
-                }
-                onBlur={(e) =>
-                  (e.target.style.borderColor = "var(--border-base)")
-                }
-              />
-              <button
-                type="button"
-                onClick={() => setShowPass((p) => !p)}
-                style={{
-                  position: "absolute",
-                  right: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--text-muted)",
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
+              <CheckCircle2 size={15} />
+              Password changed successfully — sign in with your new password
+            </motion.div>
+          )}
+
+          {error && (
+            <motion.div
+              className="login-error"
+              role="alert"
+              aria-live="assertive"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <AlertCircle size={15} />
+              {error}
+            </motion.div>
+          )}
+
+          <form className="login-form" onSubmit={handleSubmit}>
+            <div className="login-field">
+              <label className="login-label" htmlFor="login-username">
+                Username
+              </label>
+              <div className="login-input-wrap">
+                <User size={16} className="login-input__icon" aria-hidden="true" />
+                <input
+                  id="login-username"
+                  name="username"
+                  className="login-input"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  autoComplete="username"
+                  autoFocus
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="login-field">
+              <label className="login-label" htmlFor="login-password">
+                Password
+              </label>
+              <div className="login-input-wrap">
+                <Lock size={16} className="login-input__icon" aria-hidden="true" />
+                <input
+                  id="login-password"
+                  name="password"
+                  className="login-input login-input--with-toggle"
+                  type={showPass ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => setCapsLock(e.getModifierState("CapsLock"))}
+                  onKeyUp={(e) => setCapsLock(e.getModifierState("CapsLock"))}
+                  onBlur={() => setCapsLock(false)}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-toggle"
+                  onClick={() => setShowPass((p) => !p)}
+                  aria-label={showPass ? "Hide password" : "Show password"}
+                  aria-pressed={showPass}
+                >
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {capsLock && (
+                <div className="login-caps" role="status">
+                  <AlertCircle size={13} />
+                  Caps Lock is on
+                </div>
+              )}
+            </div>
+
+            <button type="submit" className="login-submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                <>
+                  Sign in
+                  <ArrowRight size={16} className="login-submit__arrow" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="login-help">
+            <div className="login-help__icon">
+              <Info size={15} />
+            </div>
+            <div className="login-help__text">
+              <strong>Need access?</strong> Contact your administrator to get an
+              account or sort out access requirements.
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              marginTop: 4,
-              padding: "10px",
-              borderRadius: "var(--radius-md)",
-              border: "none",
-              background: loading ? "var(--brand-300)" : "var(--brand-500)",
-              color: "white",
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: loading ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              transition: "background 0.15s",
-            }}
-          >
-            {loading && <Loader2 size={14} className="animate-spin" />}
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-        </form>
-
-        {/* Contact administrator note */}
-        <div
-          style={{
-            marginTop: 18,
-            paddingTop: 14,
-            borderTop: "1px solid var(--border-base)",
-            fontSize: 12,
-            color: "var(--text-muted)",
-            textAlign: "center",
-            lineHeight: 1.5,
-          }}
-        >
-          Need an account or have other access requirements?
-          <br />
-          Contact your administrator.
-        </div>
-      </motion.div>
-
-      {/* Developed by badge */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 16,
-          left: "50%",
-          transform: "translateX(-50%)",
-          fontSize: 12,
-          color: "var(--text-muted)",
-          letterSpacing: "0.2px",
-        }}
-      >
-        Developed by Vidun Hettiarachchi
+          <div className="login-credit">Developed by Vidun Hettiarachchi</div>
+        </motion.div>
       </div>
     </div>
   );
